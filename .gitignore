@@ -281,3 +281,6 @@ pip-wheel-metadata/
 pytestdebug.log
 
 *.pyc
+*.pyo
+*.pyd
+__pycache__/
