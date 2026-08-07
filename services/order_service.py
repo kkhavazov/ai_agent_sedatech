@@ -32,6 +32,8 @@ class OrderService:
         document_type: str | None = None,
         status: str | None = None,
         customer_name: str | None = None,
+        country: str | None = None,
+        address: str | None = None,
         date_from: date | None = None,
         date_to: date | None = None,
         limit: int = 20,
@@ -66,4 +68,39 @@ class OrderService:
             date_from=date_from,
             date_to=date_to,
             limit=safe_limit,
+        )
+    def count_orders(
+        self,
+        *,
+        document_type: str | None = None,
+        status: str | None = None,
+        country: str | None = None,
+        address: str | None = None,
+        date_from: date | None = None,
+        date_to: date | None = None,
+    ) -> int:
+        if date_from and date_to and date_from > date_to:
+            raise ValueError(
+                "date_from cannot be later than date_to"
+            )
+        has_filter = any(
+            [
+                status,
+                document_type,
+                date_from,
+                date_to,
+            ]
+        )
+
+        if not has_filter:
+            raise ValueError(
+                "At least one order filter must be provided"
+            )
+
+
+        return self.repository.count_orders(
+            document_type=document_type,
+            status=status,
+            date_from=date_from,
+            date_to=date_to,
         )

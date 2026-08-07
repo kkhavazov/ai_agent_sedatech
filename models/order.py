@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime
 
 
 @dataclass(slots=True)
@@ -19,7 +20,8 @@ class Order:
     order_number: str
     document_type: str
     status: str
+    date: datetime | None = None
     customer_name: str | None = None
     country: str | None = None
-    adress: str | None = None
+    address: str | None = None
     items: list[OrderItem] = field(default_factory=list)

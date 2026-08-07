@@ -8,7 +8,7 @@ import pymssql
 from models.order import Order, OrderItem
 from repositories.order_repository import OrderRepository
 
-from datetime import date
+from datetime import date, datetime
 from typing import Any
 
 
@@ -57,12 +57,13 @@ class SqlServerOrderRepository:
                 Belegnummer,
                 Belegtyp,
                 Status,
+                AngelegtAm,
                 Name,
                 Vorname,
                 Land
             FROM dbo.BELEG
             WHERE Belegnummer = %s
-            ORDER BY Datum DESC
+            ORDER BY AngelegtAm DESC
         """
 
         connection = None
@@ -124,6 +125,7 @@ class SqlServerOrderRepository:
                 if row.get("Status") is not None
                 else ""
             ),
+            date=row.get("AngelegtAm"),
             customer_name=customer_name,
             country=(
                 str(row["Land"]).strip()
@@ -141,7 +143,7 @@ class SqlServerOrderRepository:
         customer_name: str | None = None,
         date_from: date | None = None,
         date_to: date | None = None,
-        limit: int = 200,
+        limit: int = 20,
     ) -> list[Order]:
 
         safe_limit = max(1, min(int(limit), 100))
@@ -153,13 +155,13 @@ class SqlServerOrderRepository:
             where_clauses.append("Belegnummer LIKE %s")
             parameters.append(f"%{order_number.strip()}%")
 
-        if status:
-            where_clauses.append("Status = %s")
-            parameters.append(status.strip())
-
-        if document_type:
+        if document_type is not None:
             where_clauses.append("Belegtyp = %s")
-            parameters.append(document_type.strip().upper())
+            parameters.append(document_type)
+
+        if status is not None:
+            where_clauses.append("Status = %s")
+            parameters.append(status)
 
         if customer_name:
             normalized_name = customer_name.strip()
@@ -188,34 +190,32 @@ class SqlServerOrderRepository:
             ])
 
         if date_from:
-            where_clauses.append("Datum >= %s")
+            where_clauses.append("AngelegtAm >= %s")
             parameters.append(date_from)
 
         if date_to:
-            # This works if Datum is a DATE column.
-            # See the datetime note below if Datum includes a time.
-            where_clauses.append("Datum <= %s")
+            where_clauses.append("AngelegtAm < DATEADD(day, 1, %s)")
             parameters.append(date_to)
 
         where_sql = ""
 
         if where_clauses:
-            where_sql = "WHERE " + " AND ".join(where_clauses)
+            where_sql = "WHERE " + "Adressnummer <> 'K10000' AND Adressnummer <> 'DE00000' AND Adressnummer <> 'K000000' AND Vorlage = '' AND " + " AND ".join(where_clauses)
 
         query = f"""
             SELECT TOP {safe_limit}
                 Belegnummer AS OrderNumber,
                 Belegtyp AS DocumentType,
                 Status AS OrderStatus,
+                AngelegtAm AS CreationDate,
                 LTRIM(RTRIM(
                     ISNULL([Name], '') + ' ' + ISNULL([Vorname], '')
                 )) AS CustomerName,
                 Land AS Country,
-                Strasse AS Adress,
-                BearbeitetAm AS OrderDate
+                Strasse AS Address
             FROM dbo.BELEG
             {where_sql}
-            ORDER BY BearbeitetAm DESC
+            ORDER BY AngelegtAm DESC
         """
 
         connection = None
@@ -258,18 +258,82 @@ class SqlServerOrderRepository:
                 order_number=str(row["OrderNumber"]),
                 document_type=str(row["DocumentType"]),
                 status=str(row["OrderStatus"]),
+                date=row.get("CreationDate"),
                 customer_name=(
                     str(row["CustomerName"])
                     if row.get("CustomerName") is not None
                     else None
                 ),
                 country=str(row["Country"]),
-                adress=str(row["Adress"]),
+                address=str(row["Address"]),
                 items=[],
             )
             for row in rows
         ]
     
+    def count_orders(
+        self,
+        document_type: str | None = None,
+        status: str | None = None,
+        date_from: date | None = None,
+        date_to: date | None = None,
+    ) -> int:
+        conditions: list[str] = []
+        parameters: list[Any] = []
+
+        if document_type is not None:
+            conditions.append("Belegtyp = %s")
+            parameters.append(document_type)
+
+        if status is not None:
+            conditions.append("Status = %s")
+            parameters.append(status)
+
+        if date_from is not None:
+            conditions.append("AngelegtAm >= %s")
+            parameters.append(date_from)
+
+        if date_to is not None:
+            conditions.append("AngelegtAm < DATEADD(day, 1, %s)")
+            parameters.append(date_to)
+
+        where_clause = ""
+        if conditions:
+            where_clause = "WHERE " + "Adressnummer <> 'K10000' AND Adressnummer <> 'DE00000' AND Adressnummer <> 'K000000' AND Vorlage = '' AND " + " AND ".join(conditions)
+
+        query = f"""
+            SELECT COUNT(*) AS OrderCount
+            FROM dbo.BELEG
+            {where_clause}
+        """
+
+        connection = None
+        cursor = None
+
+        try:
+            connection = self._connect()
+            cursor = connection.cursor()
+            cursor.execute(query, tuple(parameters))
+
+            row = cursor.fetchone()
+
+            if row is None:
+                return 0
+
+            return int(row["OrderCount"])
+
+        except pymssql.Error as exc:
+            raise RuntimeError(
+                f"SQL Server count query failed: {exc}"
+            ) from exc
+
+        finally:
+            if cursor is not None:
+                cursor.close()
+
+            if connection is not None:
+                connection.close()
+
     def find_pc_config_by_order_number(
         self,
         order_number: str,

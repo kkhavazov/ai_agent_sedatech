@@ -7,6 +7,8 @@ from tools.registry import ToolRegistry
 from tools.orders.filter_orders import (
     FilterOrdersArguments,
     create_filter_orders_handler,
+    CountOrdersArguments,
+    create_count_orders_handler,
 )
 from tools.current_time_tools import (
     create_current_time_handler,
@@ -20,13 +22,34 @@ def build_tool_registry(order_service: OrderService) -> ToolRegistry:
         ToolDefinition(
             name="filter_orders",
             description=(
-                "Find orders when the exact order number is unknown. "
-                "Search by customer name, partial order number, status, "
-                "or date range. For example, to find orders for Nicolas "
-                "Lungu, use customer_name='Nicolas Lungu'."
+                "Search and return order documents using order lifecycle filters. "
+                "A business order progresses through A -> D -> L -> R, and may have "
+                "multiple database document rows. "
+                "Use lifecycle_state for current operational states. "
+                "Use document_type and status directly for completed or historical "
+                "stage searches. "
+                "Examples: currently in production = L/0; entered production on a "
+                "specific date = L with any status; finished production = L/2."
             ),
             arguments_model=FilterOrdersArguments,
             handler=create_filter_orders_handler(order_service),
+        )
+    )
+    registry.register(
+        ToolDefinition(
+            name="count_orders",
+            description=(
+                "Count orders or order documents matching lifecycle, customer, order "
+                "number, or date filters. "
+                "Use lifecycle_state for current operational counts. "
+                "Examples: unconfirmed = A/0; confirmed workshop = D/0; "
+                "currently in production = L/0; ready, invoiced, or sent = R/0. "
+                "When searching whether orders entered a stage historically, filter "
+                "by document_type without requiring status 0. "
+                "Do not confuse the number of returned rows with the total count."
+            ),
+            arguments_model=CountOrdersArguments,
+            handler=create_count_orders_handler(order_service),
         )
     )
     registry.register(

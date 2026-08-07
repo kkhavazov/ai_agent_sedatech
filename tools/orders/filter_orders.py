@@ -1,138 +1,165 @@
 from __future__ import annotations
 
 from datetime import date
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
 from services.order_service import OrderService
 
-
-class FilterOrdersArguments(BaseModel):
-    order_number: str | None = Field(
-        default=None,
-        description=(
-            "Full or partial order number, for example AG0950953."
-        ),
-        min_length=1,
-        max_length=50,
-    )
-
-    document_type: str | None = Field(
-        default=None,
-        description="The type of order action(A = 'Unconfirmed', D = 'Confirmed', L = 'In production', R = 'Prepared/Sent')",
-        min_length=1,
-        max_length=10,
-    )
-
-    status: str | None = Field(
-        default=None,
-        description="Exact order status to filter by. 0 = order put into state, 2 = order finished this state",
-        min_length=1,
-        max_length=100,
-    )
-
-    customer_name: str | None = Field(
-        default=None,
-        description="Full or partial customer name.",
-        min_length=1,
-        max_length=200,
-    )
-
-    date_from: date | None = Field(
-        default=None,
-        description=(
-            "Earliest order date, formatted strictly as YYYY-MM-DD. "
-            "Warning: European inputs use DD.MM.YYYY. For example, "
-            "if the user inputs '04.08.2026' for August 4th, you MUST "
-            "format this as '2026-08-04'. Do not mix up month and day."
-        ),
-    )
-
-    date_to: date | None = Field(
-        default=None,
-        description=(
-            "Latest order date, formatted strictly as YYYY-MM-DD. "
-            "Warning: European inputs use DD.MM.YYYY. For example, "
-            "if the user inputs '04.08.2026' for August 4th, you MUST "
-            "format this as '2026-08-04'. Do not mix up month and day."
-        ),
-    )
-
+from tools.orders.orders_filter_args import (
+    DocumentStatus,
+    DocumentType,
+    LifecycleState,
+    OrderFiltersArguments,
+    resolve_lifecycle_filters,
+)
+class FilterOrdersArguments(OrderFiltersArguments):
     limit: int = Field(
         default=20,
-        description="Maximum number of orders to return.",
+        description=(
+            "Maximum number of orders to return. "
+            "Use 1 for requests asking for the latest or most recent order. "
+            "If the number of returned orders equals the requested limit, "
+            "the result may be truncated. Increase the limit and retry, "
+            "up to a maximum of 100."
+        ),
         ge=1,
         le=100,
     )
 
     @model_validator(mode="after")
-    def validate_filters(self) -> "FilterOrdersArguments":
+    def require_at_least_one_filter(
+        self,
+    ) -> "FilterOrdersArguments":
         has_filter = any(
-            [
+            value is not None
+            for value in (
+                self.lifecycle_state,
                 self.order_number,
                 self.document_type,
                 self.status,
                 self.customer_name,
+                self.country,
                 self.date_from,
                 self.date_to,
-            ]
+            )
         )
 
         if not has_filter:
             raise ValueError(
-                "At least one filter must be provided"
-            )
-
-        if (
-            self.date_from
-            and self.date_to
-            and self.date_from > self.date_to
-        ):
-            raise ValueError(
-                "date_from cannot be later than date_to"
+                "At least one filter must be provided."
             )
 
         return self
 
 
+class CountOrdersArguments(OrderFiltersArguments):
+    """Arguments for counting matching orders."""
 def create_filter_orders_handler(
     order_service: OrderService,
 ):
     def filter_orders_handler(
+        lifecycle_state: LifecycleState | None = None,
         order_number: str | None = None,
-        document_type: str | None = None,
-        status: str | None = None,
+        document_type: DocumentType | None = None,
+        status: DocumentStatus | None = None,
         customer_name: str | None = None,
         country: str | None = None,
-        adress: str | None = None,
+        address: str | None = None,
         date_from: date | None = None,
         date_to: date | None = None,
         limit: int = 20,
     ) -> dict[str, Any]:
+        resolved_document_type, resolved_status = (
+            resolve_lifecycle_filters(
+                lifecycle_state=lifecycle_state,
+                document_type=document_type,
+                status=status,
+            )
+        )
+
         orders = order_service.filter_orders(
             order_number=order_number,
-            document_type=document_type,
-            status=status,
+            document_type=resolved_document_type,
+            status=resolved_status,
             customer_name=customer_name,
+            country=country,
+            address=address,
             date_from=date_from,
             date_to=date_to,
             limit=limit,
         )
 
+        returned_count = len(orders)
+
         return {
-            "count": len(orders),
+            "success": True,
+            "returned_count": returned_count,
+            "requested_limit": limit,
+            "possibly_truncated": returned_count == limit,
+            "requested_filters": {
+                "lifecycle_state": lifecycle_state,
+                "order_number": order_number,
+                "document_type": document_type,
+                "status": status,
+                "customer_name": customer_name,
+                "country": country,
+                "address": address,
+                "date_from": date_from,
+                "date_to": date_to,
+            },
+            "resolved_database_filters": {
+                "document_type": resolved_document_type,
+                "status": resolved_status,
+            },
             "orders": [
                 {
                     "order_number": order.order_number,
                     "status": order.status,
+                    "date": order.date,
                     "document_type": order.document_type,
                     "customer_name": order.customer_name,
                     "country": order.country,
-                    "adress": order.adress,
+                    "address": order.address,
                 }
                 for order in orders
             ],
         }
 
     return filter_orders_handler
+
+def create_count_orders_handler(
+    order_service: OrderService,
+):
+    def count_orders_handler(
+        lifecycle_state: LifecycleState | None = None,
+        order_number: str | None = None,
+        document_type: DocumentType | None = None,
+        status: DocumentStatus | None = None,
+        customer_name: str | None = None,
+        country: str | None = None,
+        address: str | None = None,
+        date_from: date | None = None,
+        date_to: date | None = None,
+    ) -> dict[str, Any]:
+        resolved_document_type, resolved_status = (
+            resolve_lifecycle_filters(
+                lifecycle_state=lifecycle_state,
+                document_type=document_type,
+                status=status,
+            )
+        )
+
+        count = order_service.count_orders(
+            document_type=resolved_document_type,
+            status=resolved_status,
+            country=country,
+            address=address,
+            date_from=date_from,
+            date_to=date_to,
+        )
+
+        return int(count)
+
+    return count_orders_handler

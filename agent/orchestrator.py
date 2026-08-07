@@ -44,12 +44,21 @@ class SupportAgent:
                 final_text = response.content.strip()
                 break
 
-            state.messages.append(
-                {
-                    "role": "assistant",
-                    "content": response.content,
-                }
-            )
+            assistant_message = {
+                "role": "assistant",
+                "content": response.content,
+                "tool_calls": [
+                    {
+                        "function": {
+                            "name": call.name,
+                            "arguments": call.arguments,
+                        }
+                    }
+                    for call in response.tool_calls
+                ],
+            }
+
+            state.messages.append(assistant_message)
 
             for call in response.tool_calls:
                 result = self.tool_registry.execute(call.name, call.arguments)
