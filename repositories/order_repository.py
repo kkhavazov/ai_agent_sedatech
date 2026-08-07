@@ -16,7 +16,7 @@ class OrderRepository(ABC):
         *,
         order_number: str | None = None,
         document_type: str | None = None,
-        status: str | None = None,
+        status: int | None = None,
         customer_name: str | None = None,
         date_from: date | None = None,
         date_to: date | None = None,

@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 
-
 @dataclass(slots=True)
 class OrderItem:
     sku: str
@@ -19,7 +18,7 @@ class OrderItem:
 class Order:
     order_number: str
     document_type: str
-    status: str
+    status: int
     date: datetime | None = None
     customer_name: str | None = None
     country: str | None = None

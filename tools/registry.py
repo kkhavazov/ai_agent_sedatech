@@ -54,7 +54,6 @@ class ToolRegistry:
         except LookupError as exc:
             return self._error(name, "NOT_FOUND", str(exc))
         except Exception as exc:
-            print(f"{name} failed: {type(exc).__name__}: {exc}")
             return self._error(name, "TOOL_EXECUTION_ERROR", str(exc))
 
     @staticmethod

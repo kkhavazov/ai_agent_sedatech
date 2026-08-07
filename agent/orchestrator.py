@@ -34,6 +34,46 @@ class SupportAgent:
         client = self.model_router.select(state.user_request)
         final_text = ""
 
+        # TESTING CODE
+        # for round_number in range(self.max_tool_rounds + 1):
+        #     response = client.chat(
+        #         messages=state.messages,
+        #         tools=self.tool_registry.schemas(),
+        #     )
+
+        #     print(f"\n--- Agent round {round_number + 1} ---")
+        #     print("Model content:", repr(response.content))
+        #     print(
+        #         "Tool calls:",
+        #         [
+        #             {
+        #                 "name": call.name,
+        #                 "arguments": call.arguments,
+        #             }
+        #             for call in response.tool_calls
+        #         ],
+        #     )
+
+            # if not response.tool_calls:
+            #     final_text = response.content.strip()
+            #     break
+            # for call in response.tool_calls:
+            #     result = self.tool_registry.execute(
+            #         call.name,
+            #         call.arguments,
+            #     )
+
+            #     print(
+            #         f"Tool result for {call.name}:",
+            #         json.dumps(
+            #             result,
+            #             indent=2,
+            #             ensure_ascii=False,
+            #             default=str,
+            #         ),
+            #     )
+
+
         for _ in range(self.max_tool_rounds + 1):
             response = client.chat(
                 messages=state.messages,
@@ -87,5 +127,6 @@ class SupportAgent:
             draft=final_text,
             model_name=client.name,
             tool_calls=state.tool_calls,
+            tool_results=state.tool_results,
             warnings=state.warnings,
         )

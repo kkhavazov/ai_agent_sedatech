@@ -27,14 +27,13 @@ LIFECYCLE_FILTERS = {
 def resolve_lifecycle_filters(
     *,
     lifecycle_state: LifecycleState | None,
-    document_type: str | None,
-    status: int | None,
-) -> tuple[str | None, int | None]:
+    document_type: DocumentType | None,
+    status: DocumentStatus | None,
+) -> tuple[DocumentType | None, DocumentStatus | None]:
     if lifecycle_state is not None:
         return LIFECYCLE_FILTERS[lifecycle_state]
 
     return document_type, status
-
 
 
 class OrderFiltersArguments(BaseModel):
@@ -117,15 +116,29 @@ class OrderFiltersArguments(BaseModel):
     )
 
     @model_validator(mode="after")
-    def validate_filters(self) -> OrderFiltersArguments:
-        if self.lifecycle_state is not None and (
-            self.document_type is not None
-            or self.status is not None
-        ):
-            raise ValueError(
-                "Use either lifecycle_state or document_type/status, "
-                "not both."
+    def validate_filters(self) -> "OrderFiltersArguments":
+        if self.lifecycle_state is not None:
+            expected_document_type, expected_status = (
+                LIFECYCLE_FILTERS[self.lifecycle_state]
             )
+
+            if (
+                self.document_type is not None
+                and self.document_type != expected_document_type
+            ):
+                raise ValueError(
+                    f"lifecycle_state={self.lifecycle_state!r} requires "
+                    f"document_type={expected_document_type!r}"
+                )
+
+            if (
+                self.status is not None
+                and self.status != expected_status
+            ):
+                raise ValueError(
+                    f"lifecycle_state={self.lifecycle_state!r} requires "
+                    f"status={expected_status}"
+                )
 
         if (
             self.date_from is not None

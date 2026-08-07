@@ -121,7 +121,7 @@ class SqlServerOrderRepository:
             order_number=str(row["Belegnummer"]).strip(),
             document_type=belegtyp,
             status=(
-                str(row["Status"]).strip()
+                int(row["Status"])
                 if row.get("Status") is not None
                 else ""
             ),
@@ -139,7 +139,7 @@ class SqlServerOrderRepository:
         *,
         order_number: str | None = None,
         document_type: str | None = None,
-        status: str | None = None,
+        status: int | None = None,
         customer_name: str | None = None,
         date_from: date | None = None,
         date_to: date | None = None,
@@ -193,8 +193,10 @@ class SqlServerOrderRepository:
             where_clauses.append("AngelegtAm >= %s")
             parameters.append(date_from)
 
-        if date_to:
-            where_clauses.append("AngelegtAm < DATEADD(day, 1, %s)")
+        if date_to is not None:
+            where_clauses.append(
+                "AngelegtAm < DATEADD(day, 1, %s)"
+            )
             parameters.append(date_to)
 
         where_sql = ""
@@ -257,7 +259,7 @@ class SqlServerOrderRepository:
             Order(
                 order_number=str(row["OrderNumber"]),
                 document_type=str(row["DocumentType"]),
-                status=str(row["OrderStatus"]),
+                status=int(row["OrderStatus"]),
                 date=row.get("CreationDate"),
                 customer_name=(
                     str(row["CustomerName"])
@@ -274,7 +276,7 @@ class SqlServerOrderRepository:
     def count_orders(
         self,
         document_type: str | None = None,
-        status: str | None = None,
+        status: int | None = None,
         date_from: date | None = None,
         date_to: date | None = None,
     ) -> int:
@@ -293,8 +295,10 @@ class SqlServerOrderRepository:
             conditions.append("AngelegtAm >= %s")
             parameters.append(date_from)
 
-        if date_to is not None:
-            conditions.append("AngelegtAm < DATEADD(day, 1, %s)")
+        if date_to is not None and date_to < date.max:
+            conditions.append(
+                "AngelegtAm < DATEADD(day, 1, %s)"
+            )
             parameters.append(date_to)
 
         where_clause = ""
