@@ -30,6 +30,10 @@ def build_tool_registry(order_service: OrderService) -> ToolRegistry:
                 "stage searches. "
                 "Examples: currently in production = L/0; entered production on a "
                 "specific date = L with any status; finished production = L/2."
+                "For the oldest or earliest matching order, call filter_orders with"
+                "sort_order='oldest' and limit=1."
+                "- For the newest or latest matching order, call filter_orders with"
+                "sort_order='newest' and limit=1."
             ),
             arguments_model=FilterOrdersArguments,
             handler=create_filter_orders_handler(order_service),

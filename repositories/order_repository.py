@@ -20,6 +20,7 @@ class OrderRepository(ABC):
         customer_name: str | None = None,
         date_from: date | None = None,
         date_to: date | None = None,
+        sort_order: Literal["newest", "oldest"] = "newest",
         limit: int = 20,
     ) -> list[Order]:
         raise NotImplementedError

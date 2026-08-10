@@ -143,6 +143,7 @@ class SqlServerOrderRepository:
         customer_name: str | None = None,
         date_from: date | None = None,
         date_to: date | None = None,
+        sort_order: Literal["newest", "oldest"] = "newest",
         limit: int = 20,
     ) -> list[Order]:
 
@@ -150,6 +151,11 @@ class SqlServerOrderRepository:
 
         where_clauses: list[str] = []
         parameters: list[Any] = []
+
+        sort_direction = {
+            "newest": "DESC",
+            "oldest": "ASC",
+        }[sort_order]
 
         if order_number:
             where_clauses.append("Belegnummer LIKE %s")
@@ -217,7 +223,7 @@ class SqlServerOrderRepository:
                 Strasse AS Address
             FROM dbo.BELEG
             {where_sql}
-            ORDER BY AngelegtAm DESC
+            ORDER BY AngelegtAm {sort_direction}
         """
 
         connection = None

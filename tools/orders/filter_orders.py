@@ -27,6 +27,15 @@ class FilterOrdersArguments(OrderFiltersArguments):
         ge=1,
         le=100,
     )
+    
+
+    sort_order: Literal["newest", "oldest"] = Field(
+        default="newest",
+        description=(
+            "Sort by creation date. Use 'oldest' for the earliest order "
+            "and 'newest' for the latest order."
+        ),
+    )
 
     @model_validator(mode="after")
     def require_at_least_one_filter(
@@ -69,6 +78,7 @@ def create_filter_orders_handler(
         address: str | None = None,
         date_from: date | None = None,
         date_to: date | None = None,
+        sort_order: Literal["newest", "oldest"] = "newest",
         limit: int = 20,
     ) -> dict[str, Any]:
         resolved_document_type, resolved_status = (
@@ -88,6 +98,7 @@ def create_filter_orders_handler(
             address=address,
             date_from=date_from,
             date_to=date_to,
+            sort_order=sort_order,
             limit=limit,
         )
 

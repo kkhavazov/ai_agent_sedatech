@@ -36,6 +36,7 @@ class OrderService:
         address: str | None = None,
         date_from: date | None = None,
         date_to: date | None = None,
+        sort_order: Literal["newest", "oldest"] = "newest",
         limit: int = 20,
     ) -> list[Order]:
         if date_from and date_to and date_from > date_to:
@@ -48,6 +49,7 @@ class OrderService:
                 status,
                 document_type,
                 customer_name,
+                sort_order,
                 date_from,
                 date_to,
             ]
@@ -67,6 +69,7 @@ class OrderService:
             customer_name=customer_name,
             date_from=date_from,
             date_to=date_to,
+            sort_order=sort_order,
             limit=safe_limit,
         )
     def count_orders(
