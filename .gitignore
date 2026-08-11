@@ -284,3 +284,5 @@ pytestdebug.log
 *.pyo
 *.pyd
 __pycache__/
+
+.env
