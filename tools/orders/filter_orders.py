@@ -133,6 +133,7 @@ def create_filter_orders_handler(
                     "customer_name": order.customer_name,
                     "country": order.country,
                     "address": order.address,
+                    "final_price": order.final_price,
                 }
                 for order in orders
             ],

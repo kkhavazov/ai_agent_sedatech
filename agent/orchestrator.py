@@ -15,7 +15,7 @@ class SupportAgent:
         self,
         model_router: ModelRouter,
         tool_registry: ToolRegistry,
-        max_tool_rounds: int = 4,
+        max_tool_rounds: int = 10,
     ) -> None:
         self.model_router = model_router
         self.tool_registry = tool_registry
@@ -34,46 +34,6 @@ class SupportAgent:
         client = self.model_router.select(state.user_request)
         final_text = ""
 
-        # TESTING CODE
-        # for round_number in range(self.max_tool_rounds + 1):
-        #     response = client.chat(
-        #         messages=state.messages,
-        #         tools=self.tool_registry.schemas(),
-        #     )
-
-        #     print(f"\n--- Agent round {round_number + 1} ---")
-        #     print("Model content:", repr(response.content))
-        #     print(
-        #         "Tool calls:",
-        #         [
-        #             {
-        #                 "name": call.name,
-        #                 "arguments": call.arguments,
-        #             }
-        #             for call in response.tool_calls
-        #         ],
-        #     )
-
-            # if not response.tool_calls:
-            #     final_text = response.content.strip()
-            #     break
-            # for call in response.tool_calls:
-            #     result = self.tool_registry.execute(
-            #         call.name,
-            #         call.arguments,
-            #     )
-
-            #     print(
-            #         f"Tool result for {call.name}:",
-            #         json.dumps(
-            #             result,
-            #             indent=2,
-            #             ensure_ascii=False,
-            #             default=str,
-            #         ),
-            #     )
-
-
         for _ in range(self.max_tool_rounds + 1):
             response = client.chat(
                 messages=state.messages,
@@ -82,6 +42,13 @@ class SupportAgent:
 
             if not response.tool_calls:
                 final_text = response.content.strip()
+
+                if not final_text:
+                    state.warnings.append(
+                        "Model returned an empty response after tool execution"
+                    )
+                    continue
+
                 break
 
             assistant_message = {
@@ -102,6 +69,9 @@ class SupportAgent:
 
             for call in response.tool_calls:
                 result = self.tool_registry.execute(call.name, call.arguments)
+                if not result["success"]:
+                    print(result["error"]["code"])
+                    print(result["error"]["message"])
                 state.tool_calls.append(
                     {"name": call.name, "arguments": call.arguments}
                 )
@@ -109,8 +79,12 @@ class SupportAgent:
                 state.messages.append(
                     {
                         "role": "tool",
-                        "name": call.name,
-                        "content": json.dumps(result, ensure_ascii=False, default=str),
+                        "tool_name": call.name,
+                        "content": json.dumps(
+                            result,
+                            ensure_ascii=False,
+                            default=str,
+                        ),
                     }
                 )
         else:

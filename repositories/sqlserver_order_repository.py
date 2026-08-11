@@ -60,6 +60,7 @@ class SqlServerOrderRepository:
                 AngelegtAm,
                 Name,
                 Vorname,
+                EuroBrutto,
                 Land
             FROM dbo.BELEG
             WHERE Belegnummer = %s
@@ -132,6 +133,7 @@ class SqlServerOrderRepository:
                 if row.get("Land") is not None
                 else None
             ),
+            final_price = row.get("EuroBrutto"),
             items=items,
         )
     def filter_orders(
@@ -220,7 +222,8 @@ class SqlServerOrderRepository:
                     ISNULL([Name], '') + ' ' + ISNULL([Vorname], '')
                 )) AS CustomerName,
                 Land AS Country,
-                Strasse AS Address
+                Strasse AS Address,
+                EuroBrutto AS FinalPrice
             FROM dbo.BELEG
             {where_sql}
             ORDER BY AngelegtAm {sort_direction}
@@ -274,6 +277,11 @@ class SqlServerOrderRepository:
                 ),
                 country=str(row["Country"]),
                 address=str(row["Address"]),
+                final_price=(
+                    float(row["FinalPrice"])
+                    if row.get("FinalPrice") is not None
+                    else None
+                ),
                 items=[],
             )
             for row in rows
@@ -354,11 +362,10 @@ class SqlServerOrderRepository:
                 Bezeichnung,
                 Menge,
                 KalkpreisEuro,
-                Stueckliste,
-                Postext
+                Zeilentyp
             FROM dbo.BELEGP
             WHERE Belegnummer = %s
-            ORDER BY Postext;
+            ORDER BY BELEGP_ID;
         """
 
         connection = None
@@ -390,8 +397,8 @@ class SqlServerOrderRepository:
 
         for row in rows:
             item_type = (
-                str(row["Stueckliste"]).strip().upper()
-                if row.get("Stueckliste") is not None
+                str(row["Zeilentyp"]).strip().upper()
+                if row.get("Zeilentyp") is not None
                 else ""
             )
 

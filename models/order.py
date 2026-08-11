@@ -23,4 +23,5 @@ class Order:
     customer_name: str | None = None
     country: str | None = None
     address: str | None = None
+    final_price: float | None = None
     items: list[OrderItem] = field(default_factory=list)

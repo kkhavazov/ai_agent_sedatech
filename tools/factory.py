@@ -26,13 +26,16 @@ def build_tool_registry(order_service: OrderService) -> ToolRegistry:
                 "A business order progresses through A -> D -> L -> R, and may have "
                 "multiple database document rows. "
                 "Use lifecycle_state for current operational states. "
+                "Ready for shipment, invoiced, or sent = lifecycle_state='ready_or_sent', "
+                "which maps to document_type='R' and status='0'. "
+                "Never pass an empty string for status. Omit status when it is unknown."
                 "Use document_type and status directly for completed or historical "
                 "stage searches. "
                 "Examples: currently in production = L/0; entered production on a "
                 "specific date = L with any status; finished production = L/2."
                 "For the oldest or earliest matching order, call filter_orders with"
                 "sort_order='oldest' and limit=1."
-                "- For the newest or latest matching order, call filter_orders with"
+                "For the newest or latest matching order, call filter_orders with"
                 "sort_order='newest' and limit=1."
             ),
             arguments_model=FilterOrdersArguments,
