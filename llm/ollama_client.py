@@ -47,8 +47,8 @@ class OllamaClient(LLMClient):
             raise RuntimeError(f"Ollama request failed: {exc}") from exc
 
         data = response.json()
-        import json
-        print(json.dumps(data, indent=2, ensure_ascii=False))
+        # import json
+        # print(json.dumps(data, indent=2, ensure_ascii=False))
         message = data.get("message", {})
         calls: list[ToolCall] = []
 

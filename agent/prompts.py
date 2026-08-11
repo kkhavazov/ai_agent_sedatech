@@ -91,6 +91,15 @@ orders are there?", do not assume that all status 0 documents mean the
 same thing. Return a breakdown by lifecycle stage or explain which stage
 was counted.
 
+When asked how many business orders there are, count only final-stage
+R documents with status 0. Do not count A, D, L, and R rows together,
+because they represent lifecycle documents for the same business order.
+
+For "sent orders", always use lifecycle_state="ready_or_sent".
+
+If the employee explicitly asks for documents or lifecycle activity,
+then count the requested document stages instead.
+
 TOOL SELECTION
 
 - Use get_current_time when the current time is required.

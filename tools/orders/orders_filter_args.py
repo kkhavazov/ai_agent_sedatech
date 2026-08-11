@@ -37,6 +37,17 @@ def resolve_lifecycle_filters(
 
 
 class OrderFiltersArguments(BaseModel):
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_empty_strings(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+
+        return {
+            key: None if isinstance(value, str) and not value.strip() else value
+            for key, value in data.items()
+        }
+        
     lifecycle_state: LifecycleState | None = Field(
         default=None,
         description=(
