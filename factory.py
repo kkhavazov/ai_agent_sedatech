@@ -6,8 +6,12 @@ from llm.gemini_client import GeminiClient
 from llm.model_router import ModelRouter
 from llm.ollama_client import OllamaClient
 from repositories.demo_order_repository import DemoOrderRepository
+from repositories.demo_item_repository import DemoItemRepository
+from repositories.item_repository import ItemRepository
 from repositories.order_repository import OrderRepository
+from repositories.sqlserver_item_repository import SqlServerItemRepository
 from repositories.sqlserver_order_repository import SqlServerOrderRepository
+from services.item_service import ItemService
 from services.order_service import OrderService
 from tools.factory import build_tool_registry
 
@@ -44,14 +48,30 @@ def build_repository(settings: Settings) -> OrderRepository:
     return DemoOrderRepository()
 
 
+def build_item_repository(settings: Settings) -> ItemRepository:
+    if settings.repository_backend == "sqlserver":
+        return SqlServerItemRepository(
+            server=settings.sqlserver_server,
+            user=settings.sqlserver_user,
+            password=settings.sqlserver_password,
+            database=settings.sqlserver_database,
+            tds_version=settings.sqlserver_tds_version,
+            port=settings.sqlserver_port,
+            login_timeout_seconds=settings.sqlserver_login_timeout_seconds,
+            query_timeout_seconds=settings.sqlserver_query_timeout_seconds,
+        )
+    return DemoItemRepository()
+
+
 def build_agent(settings: Settings | None = None) -> SupportAgent:
     settings = settings or Settings()
     settings.validate()
 
     repository = build_repository(settings)
     order_service = OrderService(repository)
-    tool_registry = build_tool_registry(order_service)
-    
+    item_service = ItemService(build_item_repository(settings))
+    tool_registry = build_tool_registry(order_service, item_service)
+
 
     local_client = OllamaClient(
         base_url=settings.ollama_base_url,

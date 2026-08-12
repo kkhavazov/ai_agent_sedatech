@@ -1,21 +1,29 @@
 from __future__ import annotations
 
 from services.order_service import OrderService
+from services.item_service import ItemService
 from tools.registry import ToolDefinition, ToolRegistry
 from tools.order_tools import build_get_order_tool
-from tools.registry import ToolRegistry
 from tools.orders.filter_orders import (
     FilterOrdersArguments,
     create_filter_orders_handler,
     CountOrdersArguments,
     create_count_orders_handler,
 )
+from tools.items.search_item import (
+    SearchItemsArguments,
+    create_search_items_handler,
+)
 from tools.current_time_tools import (
     create_current_time_handler,
     GetCurrentTimeArgs,
-    )
+)
 
-def build_tool_registry(order_service: OrderService) -> ToolRegistry:
+
+def build_tool_registry(
+    order_service: OrderService,
+    item_service: ItemService | None = None,
+) -> ToolRegistry:
     registry = ToolRegistry()
     registry.register(build_get_order_tool(order_service))
     registry.register(
@@ -59,6 +67,17 @@ def build_tool_registry(order_service: OrderService) -> ToolRegistry:
             handler=create_count_orders_handler(order_service),
         )
     )
+    if item_service is not None:
+        registry.register(
+            ToolDefinition(
+                name="search_item",
+                description=(
+                    "Search and return items from current inventory."
+                ),
+                arguments_model=SearchItemsArguments,
+                handler=create_search_items_handler(item_service),
+            )
+        )
     registry.register(
         ToolDefinition(
             name="get_current_time",

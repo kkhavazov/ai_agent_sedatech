@@ -16,13 +16,13 @@ class DemoOrderRepository(OrderRepository):
                     OrderItem(
                         sku="UCCZ604I1_13915",
                         name="Sedatech PC Gaming - Win 11",
-                        amount=1,
+                        quantity=1,
                         price=1507.02,
                         sub_items=[
                             OrderItem(
                                 sku="UCCZ604I1_13915",
                         name="Sedatech PC Gaming - Win 11",
-                        amount=1,
+                        quantity=1,
                         price=1507.02,
                         sub_items=[]
                             )
