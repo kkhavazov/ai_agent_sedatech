@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from repositories.item_repository import ItemRepository
 
 class ItemNotFoundError(LookupError):
@@ -18,6 +20,10 @@ class ItemService:
         item_name: str | None = None,
         ram_capacity: int | None = None,
         ram_ddr: int | None = None,
+        cpu_manufacturer: Literal["Intel", "AMD"] | None = None,
+        cpu_generation: int | None = None,
+        cpu_model: int | None = None,
+        cpu_prefix: str | None = None,
     ) -> int:
         has_filter = any(
             [
@@ -27,6 +33,10 @@ class ItemService:
                 item_name,
                 ram_capacity,
                 ram_ddr,
+                cpu_generation,
+                cpu_manufacturer,
+                cpu_model,
+                cpu_prefix,
             ]
         )
 
@@ -42,4 +52,8 @@ class ItemService:
             item_name=item_name,
             ram_capacity=ram_capacity,
             ram_ddr=ram_ddr,
+            cpu_generation = cpu_generation,
+            cpu_manufacturer = cpu_manufacturer,
+            cpu_model = cpu_model,
+            cpu_prefix = cpu_prefix,
         )

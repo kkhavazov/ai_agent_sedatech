@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from typing import Literal
 
 class ItemRepository(ABC):
     @abstractmethod
@@ -13,5 +14,9 @@ class ItemRepository(ABC):
         item_name: str | None = None,
         ram_capacity: int | None = None,
         ram_ddr: int | None = None,
+        cpu_manufacturer: Literal["Intel", "AMD"] | None = None,
+        cpu_generation: int | None = None,
+        cpu_model: int | None = None,
+        cpu_prefix: str | None = None,
     ) -> int:
         raise NotImplementedError

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, Literal
 
 import pymssql
 
@@ -57,6 +57,10 @@ class SqlServerItemRepository(ItemRepository):
         item_name: str | None = None,
         ram_capacity: int | None = None,
         ram_ddr: int | None = None,
+        cpu_manufacturer: Literal["Intel", "AMD"] | None = None,
+        cpu_generation: int | None = None,
+        cpu_model: int | None = None,
+        cpu_prefix: str | None = None,
     ) -> int:
         filters: list[str] = []
         parameters: list[Any] = []
@@ -70,14 +74,39 @@ class SqlServerItemRepository(ItemRepository):
             if value:
                 filters.append(f"{column} LIKE %s")
                 parameters.append(f"%{value.strip()}%")
+        if category == "ME":
+            if ram_capacity is not None:
+                filters.append("ART.Bezeichnung LIKE %s")
+                parameters.append(f"{ram_capacity}GB%")
+            if ram_ddr is not None:
+                filters.append("ART.Bezeichnung LIKE %s")
+                parameters.append(f"%DDR{ram_ddr}%")
+        if category == "CP" and cpu_manufacturer:
+            gen = str(cpu_generation).strip() if cpu_generation is not None else ""
+            model = str(cpu_model).strip() if cpu_model is not None else ""
+            prefix = (cpu_prefix or "").strip()
 
-        if ram_capacity is not None:
-            filters.append("ART.Bezeichnung LIKE %s")
-            parameters.append(f"{ram_capacity}GB%")
-        if ram_ddr is not None:
-            filters.append("ART.Bezeichnung LIKE %s")
-            parameters.append(f"%DDR{ram_ddr}%")
-
+            if model:
+                if cpu_manufacturer == "Intel":
+                    full_name = f"Intel Core i{gen}-{model}{prefix} "
+                    filters.append("ART.Bezeichnung LIKE %s")
+                    parameters.append(f"{full_name}%")
+                elif cpu_manufacturer == "AMD":
+                    full_name = f"AMD Ryzen {gen} {model}{prefix}"
+                    filters.append("ART.Bezeichnung = %s")
+                    parameters.append(f"{full_name}")
+            elif cpu_generation is not None:
+                filters.append("ART.Bezeichnung LIKE %s")
+                if cpu_manufacturer == "Intel":
+                    parameters.append(f"Intel Core i{gen}-%")
+                else:
+                    parameters.append(f"AMD Ryzen {gen} %")
+            elif cpu_manufacturer == "Intel":
+                filters.append("ART.Bezeichnung LIKE %s")
+                parameters.append(f"Intel Core %")
+            else:
+                filters.append("ART.Bezeichnung LIKE %s")
+                parameters.append(f"AMD Ryzen {gen} %")
         where_sql = "WHERE " + " AND ".join(
             [
                 "SERIE.SCTyp <> 'O'",
@@ -92,7 +121,7 @@ class SqlServerItemRepository(ItemRepository):
             INNER JOIN ART ON ART.Artikelnummer = SERIE.Artikelnummer
         """
         count_query = f"""
-            SELECT COUNT(*) AS ItemCount
+            SELECT COALESCE(SUM(LAGERP.Bestand), 0) AS ItemCount
             {from_sql}
             {where_sql}
         """

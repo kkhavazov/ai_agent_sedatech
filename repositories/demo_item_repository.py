@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from models.order import OrderItem
 from repositories.item_repository import ItemRepository
 
@@ -19,6 +21,11 @@ class DemoItemRepository(ItemRepository):
         category: str | None = None,
         item_name: str | None = None,
         ram_capacity: int | None = None,
+        ram_ddr: int | None = None,
+        cpu_manufacturer: Literal["Intel", "AMD"] | None = None,
+        cpu_generation: int | None = None,
+        cpu_model: int | None = None,
+        cpu_prefix: str | None = None,
     ) -> int:
         items = self._items
         if sku:
@@ -28,6 +35,11 @@ class DemoItemRepository(ItemRepository):
         if category:
             items = [item for item in items if item.sku.casefold().startswith(category.casefold())]
         if manufacturer:
+            items = []
+        if any(
+            value is not None
+            for value in (cpu_manufacturer, cpu_generation, cpu_model, cpu_prefix)
+        ):
             items = []
         if ram_capacity is not None:
             capacity_prefix = f"{ram_capacity}GB".casefold()
