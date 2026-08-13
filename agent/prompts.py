@@ -109,7 +109,7 @@ TOOL SELECTION
   partial order number, lifecycle stage, document status, or date range.
 - When filter_orders returns one or more orders, use the returned data to
   answer the request.
-- Use search_item when information about an inventory item is required
+- Use search_item when the amount and/or average price of an inventory item is required
 - When the user requests items for the latest order and no exact order
   number is given, first call filter_orders with limit=1. Then call
   get_order using the returned order_number to retrieve the item list.

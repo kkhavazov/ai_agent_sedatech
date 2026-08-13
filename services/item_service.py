@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from models.item import SearchItemResponse
 from repositories.item_repository import ItemRepository
 
 class ItemNotFoundError(LookupError):
@@ -17,14 +16,17 @@ class ItemService:
         manufacturer: str | None = None,
         category: str | None = None,
         item_name: str | None = None,
-        limit: int = 20,
-    ) -> SearchItemResponse:
+        ram_capacity: int | None = None,
+        ram_ddr: int | None = None,
+    ) -> int:
         has_filter = any(
             [
                 sku,
                 manufacturer,
                 category,
                 item_name,
+                ram_capacity,
+                ram_ddr,
             ]
         )
 
@@ -33,12 +35,11 @@ class ItemService:
                 "At least one item filter must be provided"
             )
 
-        safe_limit = max(1, min(limit, 100))
-
         return self.repository.search_inventory(
             sku=sku,
             manufacturer=manufacturer,
             category=category,
             item_name=item_name,
-            limit=safe_limit,
+            ram_capacity=ram_capacity,
+            ram_ddr=ram_ddr,
         )

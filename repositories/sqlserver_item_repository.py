@@ -5,8 +5,6 @@ from typing import Any
 
 import pymssql
 
-from models.item import SearchItemResponse
-from models.order import OrderItem
 from repositories.item_repository import ItemRepository
 
 
@@ -57,9 +55,9 @@ class SqlServerItemRepository(ItemRepository):
         manufacturer: str | None = None,
         category: str | None = None,
         item_name: str | None = None,
-        limit: int = 20,
-    ) -> SearchItemResponse:
-        safe_limit = max(1, min(int(limit), 100))
+        ram_capacity: int | None = None,
+        ram_ddr: int | None = None,
+    ) -> int:
         filters: list[str] = []
         parameters: list[Any] = []
 
@@ -72,6 +70,13 @@ class SqlServerItemRepository(ItemRepository):
             if value:
                 filters.append(f"{column} LIKE %s")
                 parameters.append(f"%{value.strip()}%")
+
+        if ram_capacity is not None:
+            filters.append("ART.Bezeichnung LIKE %s")
+            parameters.append(f"{ram_capacity}GB%")
+        if ram_ddr is not None:
+            filters.append("ART.Bezeichnung LIKE %s")
+            parameters.append(f"%DDR{ram_ddr}%")
 
         where_sql = "WHERE " + " AND ".join(
             [
@@ -86,16 +91,6 @@ class SqlServerItemRepository(ItemRepository):
             INNER JOIN SERIE ON SERIE.Id = LAGERP.IdSerie
             INNER JOIN ART ON ART.Artikelnummer = SERIE.Artikelnummer
         """
-        item_query = f"""
-            SELECT TOP {safe_limit}
-                SERIE.Artikelnummer AS SKU,
-                ART.Bezeichnung AS ItemName,
-                LAGERP.Menge AS Quantity,
-                LAGERP.Wert AS Price
-            {from_sql}
-            {where_sql}
-            ORDER BY LAGERP.AngelegtAm DESC
-        """
         count_query = f"""
             SELECT COUNT(*) AS ItemCount
             {from_sql}
@@ -107,8 +102,6 @@ class SqlServerItemRepository(ItemRepository):
         try:
             connection = self._connect()
             cursor = connection.cursor()
-            cursor.execute(item_query, tuple(parameters))
-            rows: list[dict[str, Any]] = cursor.fetchall()
             cursor.execute(count_query, tuple(parameters))
             count_row = cursor.fetchone()
         except pymssql.Error as exc:
@@ -122,15 +115,4 @@ class SqlServerItemRepository(ItemRepository):
             if connection is not None:
                 connection.close()
 
-        return SearchItemResponse(
-            total_count=int(count_row["ItemCount"]) if count_row else 0,
-            items=[
-                OrderItem(
-                    sku=str(row["SKU"]).strip(),
-                    name=str(row["ItemName"]).strip(),
-                    quantity=int(row["Quantity"]),
-                    price=(float(row["Price"]) if row.get("Price") is not None else None),
-                )
-                for row in rows
-            ],
-        )
+        return int(count_row["ItemCount"]) if count_row else 0

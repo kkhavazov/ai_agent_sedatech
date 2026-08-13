@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from models.item import SearchItemResponse
 from models.order import OrderItem
 from repositories.item_repository import ItemRepository
 
@@ -19,8 +18,8 @@ class DemoItemRepository(ItemRepository):
         manufacturer: str | None = None,
         category: str | None = None,
         item_name: str | None = None,
-        limit: int = 20,
-    ) -> SearchItemResponse:
+        ram_capacity: int | None = None,
+    ) -> int:
         items = self._items
         if sku:
             items = [item for item in items if sku.casefold() in item.sku.casefold()]
@@ -30,4 +29,11 @@ class DemoItemRepository(ItemRepository):
             items = [item for item in items if item.sku.casefold().startswith(category.casefold())]
         if manufacturer:
             items = []
-        return SearchItemResponse(total_count=len(items), items=items[:limit])
+        if ram_capacity is not None:
+            capacity_prefix = f"{ram_capacity}GB".casefold()
+            items = [
+                item
+                for item in items
+                if item.name.casefold().startswith(capacity_prefix)
+            ]
+        return len(items)

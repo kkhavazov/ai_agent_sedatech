@@ -72,7 +72,7 @@ def build_tool_registry(
             ToolDefinition(
                 name="search_item",
                 description=(
-                    "Search and return items from current inventory."
+                    "Return the number of inventory items matching the filters."
                 ),
                 arguments_model=SearchItemsArguments,
                 handler=create_search_items_handler(item_service),
