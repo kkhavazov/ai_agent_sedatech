@@ -58,7 +58,7 @@ class SearchItemsArguments(BaseModel):
     cpu_manufacturer: ManufacturerType | None = Field(
         default=None,
         description=(
-            "Manufacturer of the CPU, Intel or AMD."
+            "Manufacturer of the CPU, 'Intel' or 'AMD'."
         ),
         min_length=1,
         max_length=100,
@@ -70,20 +70,12 @@ class SearchItemsArguments(BaseModel):
             "Use 9 for AMD Ryzen 9 9900X and 9 for Intel Core i9-14900K."
         ),
     )
-    cpu_model: int | str | None = Field(
+    cpu_model: str | int | None = Field(
         default=None,
         description=(
-            "Numeric CPU model. A suffix may also be attached and will be split out. "
-            "Examples: 14900 or 14900KF; for i9-14900KF use cpu_model=14900 "
-            "and cpu_prefix='KF', or pass cpu_model='14900KF'."
-        ),
-    )
-    cpu_prefix: str | None = Field(
-        default=None,
-        description=(
-            "CPU model suffix (despite the legacy field name). "
-            "Preserve the complete suffix in its original order: i9-14900K uses K, "
-            "i9-14900KF uses KF (not F or FK). For AMD use X, X3D, etc."
+            "CPU model including its complete suffix. Do not include the tier or "
+            "manufacturer. Examples: 14900K, 14900KF, 9900X, or 7800X3D. "
+            "ALWAYS use exact model name, not a partial name. "
         ),
     )
 
@@ -105,14 +97,13 @@ class SearchItemsArguments(BaseModel):
                 self.cpu_manufacturer,
                 self.cpu_generation,
                 self.cpu_model,
-                self.cpu_prefix,
             )
         ):
             if self.category is None:
                 self.category = "CP"
             elif self.category != "CP":
                 raise ValueError(
-                    "cpu_manufacturer, cpu_generation, cpu_model, and cpu_prefix can only be used with CPU."
+                    "cpu_manufacturer, cpu_generation, cpu_model can only be used with CPU."
                 )
         if not any(
             (
@@ -125,40 +116,21 @@ class SearchItemsArguments(BaseModel):
                 self.cpu_manufacturer,
                 self.cpu_generation,
                 self.cpu_model,
-                self.cpu_prefix,
             )
         ):
             raise ValueError("At least one item filter must be provided.")
 
-        # Normalize a combined model and suffix such as 9900X or 7800X3D.
         if self.cpu_model is not None:
-            model_str = str(self.cpu_model).strip()
-            m = re.fullmatch(r"(\d+)([A-Za-z][A-Za-z0-9]*)?", model_str)
-            if not m:
-                raise ValueError(
-                    "cpu_model must contain digits, optionally followed by a suffix like X, X3D, or K"
-                )
-
-            numeric_model, suffix = m.group(1), m.group(2)
-            parsed_suffix = suffix.upper() if suffix else ""
-            explicit_suffix = (self.cpu_prefix or "").strip().upper()
-            if explicit_suffix and not re.fullmatch(r"[A-Z][A-Z0-9]*", explicit_suffix):
-                raise ValueError("cpu_prefix must contain letters and digits only")
-            if parsed_suffix and explicit_suffix and parsed_suffix != explicit_suffix:
-                raise ValueError("cpu_model suffix conflicts with cpu_prefix")
-            self.cpu_model = int(numeric_model)
-            if self.cpu_model <= 0:
-                raise ValueError("cpu_model must be greater than zero")
-            self.cpu_prefix = explicit_suffix or parsed_suffix
-
             if self.cpu_manufacturer is None:
                 raise ValueError("cpu_manufacturer is required when cpu_model is provided")
-            if self.cpu_generation is None:
-                raise ValueError("cpu_generation is required when cpu_model is provided")
-        elif self.cpu_prefix is not None:
-            if self.cpu_prefix.strip():
-                raise ValueError("cpu_prefix requires cpu_model")
-            self.cpu_prefix = None
+            model = str(self.cpu_model).strip().upper()
+            if not re.fullmatch(r"\d+[A-Z][A-Z0-9]*|\d+", model):
+                raise ValueError(
+                    "cpu_model must be an exact model such as 14900KF or 7800X3D"
+                )
+            if int(re.match(r"\d+", model).group()) <= 0:
+                raise ValueError("cpu_model must be greater than zero")
+            self.cpu_model = model
 
         if self.cpu_generation is not None and self.cpu_generation <= 0:
             raise ValueError("cpu_generation must be greater than zero")
@@ -180,8 +152,7 @@ def create_search_items_handler(item_service: ItemService):
         ram_ddr: int | None = None,
         cpu_manufacturer: Literal["Intel", "AMD"] | None = None,
         cpu_generation: int | None = None,
-        cpu_model: int | str | None = None,
-        cpu_prefix: str | None = None,
+        cpu_model: str | int | None = None,
     ) -> dict[str, Any]:
         # Validate and normalize inputs using SearchItemsArguments
         args = SearchItemsArguments(
@@ -194,7 +165,6 @@ def create_search_items_handler(item_service: ItemService):
             cpu_generation=cpu_generation,
             cpu_manufacturer=cpu_manufacturer,
             cpu_model=cpu_model,
-            cpu_prefix=cpu_prefix,
         )
 
 
@@ -207,7 +177,6 @@ def create_search_items_handler(item_service: ItemService):
             ram_ddr=args.ram_ddr,
             cpu_generation=args.cpu_generation,
             cpu_manufacturer=args.cpu_manufacturer,
-            cpu_prefix=args.cpu_prefix,
             cpu_model=args.cpu_model,
         )
         return {
@@ -221,7 +190,6 @@ def create_search_items_handler(item_service: ItemService):
                 "cpu_generation": args.cpu_generation,
                 "cpu_manufacturer": args.cpu_manufacturer,
                 "cpu_model": args.cpu_model,
-                "cpu_prefix": args.cpu_prefix,
             },
             "amount": result,
         }

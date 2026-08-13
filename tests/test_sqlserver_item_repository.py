@@ -42,12 +42,14 @@ def test_amd_cpu_search_uses_cpu_manufacturer_and_prefix_match() -> None:
         category="CP",
         cpu_manufacturer="AMD",
         cpu_generation=9,
-        cpu_model=9900,
-        cpu_prefix="X",
+        cpu_model="9900X",
     )
 
     assert amount == 12
-    assert cursor.parameters[-1] == "AMD Ryzen 9 9900X%"
+    assert cursor.parameters[-2:] == (
+        "AMD Ryzen 9 9900X",
+        "AMD Ryzen 9 9900X %",
+    )
     assert "SUM(LAGERP.Bestand)" in cursor.query
 
 
@@ -58,11 +60,32 @@ def test_intel_cpu_search_matches_names_with_or_without_description() -> None:
         category="CP",
         cpu_manufacturer="Intel",
         cpu_generation=9,
-        cpu_model=14900,
-        cpu_prefix="K",
+        cpu_model="14900K",
     )
 
-    assert cursor.parameters[-1] == "Intel Core i9-14900K%"
+    assert cursor.parameters[-4:] == (
+        "Intel Core i9-14900K",
+        "Intel Core i9-14900K %",
+        "Intel Core Ultra 9 14900K",
+        "Intel Core Ultra 9 14900K %",
+    )
+
+
+def test_intel_kf_search_without_tier_has_exact_model_boundary() -> None:
+    repository, cursor = make_repository()
+
+    repository.search_inventory(
+        category="CP",
+        cpu_manufacturer="Intel",
+        cpu_model="14900KF",
+    )
+
+    assert cursor.parameters[-4:] == (
+        "Intel Core i%-14900KF",
+        "Intel Core i%-14900KF %",
+        "Intel Core Ultra % 14900KF",
+        "Intel Core Ultra % 14900KF %",
+    )
 
 
 def test_partial_cpu_search_is_filtered() -> None:

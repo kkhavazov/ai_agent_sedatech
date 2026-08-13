@@ -54,8 +54,7 @@ def test_cpu_fields_infer_category_and_parse_model_suffix() -> None:
     )
 
     assert arguments.category == "CP"
-    assert arguments.cpu_model == 9900
-    assert arguments.cpu_prefix == "X"
+    assert arguments.cpu_model == "9900X"
 
 
 def test_suffixless_cpu_model_is_supported() -> None:
@@ -65,18 +64,12 @@ def test_suffixless_cpu_model_is_supported() -> None:
         cpu_model=7700,
     )
 
-    assert arguments.cpu_model == 7700
-    assert arguments.cpu_prefix == ""
+    assert arguments.cpu_model == "7700"
 
 
 def test_cpu_fields_reject_conflicting_category() -> None:
     with pytest.raises(ValidationError):
         SearchItemsArguments(category="GC", cpu_manufacturer="AMD")
-
-
-def test_cpu_suffix_requires_model() -> None:
-    with pytest.raises(ValidationError):
-        SearchItemsArguments(cpu_manufacturer="AMD", cpu_prefix="X")
 
 
 def test_cpu_generation_requires_manufacturer() -> None:
@@ -106,9 +99,19 @@ def test_cpu_handler_forwards_normalized_filters() -> None:
 
     assert repository.filters["category"] == "CP"
     assert repository.filters["cpu_manufacturer"] == "Intel"
-    assert repository.filters["cpu_model"] == 14900
-    assert repository.filters["cpu_prefix"] == "KF"
-    assert result["requested_filters"]["cpu_prefix"] == "KF"
+    assert repository.filters["cpu_model"] == "14900KF"
+    assert result["requested_filters"]["cpu_model"] == "14900KF"
+
+
+def test_cpu_model_does_not_require_tier() -> None:
+    arguments = SearchItemsArguments(
+        cpu_manufacturer="Intel",
+        cpu_model="14900KF",
+    )
+
+    assert arguments.category == "CP"
+    assert arguments.cpu_generation is None
+    assert arguments.cpu_model == "14900KF"
 
 
 def test_demo_repository_accepts_cpu_filters() -> None:

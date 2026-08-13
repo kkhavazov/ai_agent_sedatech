@@ -22,8 +22,7 @@ class ItemService:
         ram_ddr: int | None = None,
         cpu_manufacturer: Literal["Intel", "AMD"] | None = None,
         cpu_generation: int | None = None,
-        cpu_model: int | None = None,
-        cpu_prefix: str | None = None,
+        cpu_model: str | None = None,
     ) -> int:
         has_filter = any(
             [
@@ -36,7 +35,6 @@ class ItemService:
                 cpu_generation,
                 cpu_manufacturer,
                 cpu_model,
-                cpu_prefix,
             ]
         )
 
@@ -55,5 +53,4 @@ class ItemService:
             cpu_generation = cpu_generation,
             cpu_manufacturer = cpu_manufacturer,
             cpu_model = cpu_model,
-            cpu_prefix = cpu_prefix,
         )

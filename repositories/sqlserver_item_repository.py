@@ -59,8 +59,7 @@ class SqlServerItemRepository(ItemRepository):
         ram_ddr: int | None = None,
         cpu_manufacturer: Literal["Intel", "AMD"] | None = None,
         cpu_generation: int | None = None,
-        cpu_model: int | None = None,
-        cpu_prefix: str | None = None,
+        cpu_model: str | None = None,
     ) -> int:
         filters: list[str] = []
         parameters: list[Any] = []
@@ -84,17 +83,30 @@ class SqlServerItemRepository(ItemRepository):
         if category == "CP" and cpu_manufacturer:
             gen = str(cpu_generation).strip() if cpu_generation is not None else ""
             model = str(cpu_model).strip() if cpu_model is not None else ""
-            prefix = (cpu_prefix or "").strip()
 
             if model:
                 if cpu_manufacturer == "Intel":
-                    full_name = f"Intel Core i{gen}-{model}{prefix} "
-                    filters.append("ART.Bezeichnung LIKE %s")
-                    parameters.append(f"{full_name}%")
+                    tier = gen or "%"
+                    legacy_name = f"Intel Core i{tier}-{model}"
+                    ultra_name = f"Intel Core Ultra {tier} {model}"
+                    filters.append(
+                        "(ART.Bezeichnung LIKE %s OR ART.Bezeichnung LIKE %s "
+                        "OR ART.Bezeichnung LIKE %s OR ART.Bezeichnung LIKE %s)"
+                    )
+                    parameters.extend(
+                        (
+                            legacy_name,
+                            f"{legacy_name} %",
+                            ultra_name,
+                            f"{ultra_name} %",
+                        )
+                    )
                 elif cpu_manufacturer == "AMD":
-                    full_name = f"AMD Ryzen {gen} {model}{prefix}"
-                    filters.append("ART.Bezeichnung = %s")
-                    parameters.append(f"{full_name}")
+                    full_name = f"AMD Ryzen {gen or '%'} {model}"
+                    filters.append(
+                        "(ART.Bezeichnung LIKE %s OR ART.Bezeichnung LIKE %s)"
+                    )
+                    parameters.extend((full_name, f"{full_name} %"))
             elif cpu_generation is not None:
                 filters.append("ART.Bezeichnung LIKE %s")
                 if cpu_manufacturer == "Intel":
@@ -106,7 +118,7 @@ class SqlServerItemRepository(ItemRepository):
                 parameters.append(f"Intel Core %")
             else:
                 filters.append("ART.Bezeichnung LIKE %s")
-                parameters.append(f"AMD Ryzen {gen} %")
+                parameters.append("AMD Ryzen %")
         where_sql = "WHERE " + " AND ".join(
             [
                 "SERIE.SCTyp <> 'O'",
