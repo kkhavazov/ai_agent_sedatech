@@ -10,8 +10,10 @@ from repositories.demo_item_repository import DemoItemRepository
 from repositories.item_repository import ItemRepository
 from repositories.order_repository import OrderRepository
 from repositories.sqlserver_item_repository import SqlServerItemRepository
+from repositories.sqlserver_missing_repository import SqlServerMissingRepository
 from repositories.sqlserver_order_repository import SqlServerOrderRepository
 from services.item_service import ItemService
+from services.missing_service import MissingComponentService
 from services.order_service import OrderService
 from tools.factory import build_tool_registry
 
@@ -70,7 +72,30 @@ def build_agent(settings: Settings | None = None) -> SupportAgent:
     repository = build_repository(settings)
     order_service = OrderService(repository)
     item_service = ItemService(build_item_repository(settings))
-    tool_registry = build_tool_registry(order_service, item_service)
+    missing_component_service = None
+    if settings.repository_backend == "sqlserver":
+        missing_repository = SqlServerMissingRepository(
+            server=settings.sqlserver_server or "",
+            user=settings.sqlserver_user or "",
+            password=settings.sqlserver_password or "",
+            database=settings.sqlserver_database or "",
+            tds_version=settings.sqlserver_tds_version,
+            port=settings.sqlserver_port,
+            login_timeout_seconds=(
+                settings.sqlserver_login_timeout_seconds
+            ),
+            query_timeout_seconds=(
+                settings.sqlserver_query_timeout_seconds
+            ),
+        )
+        missing_component_service = MissingComponentService(
+            missing_repository
+        )
+    tool_registry = build_tool_registry(
+        order_service,
+        item_service,
+        missing_component_service,
+    )
 
 
     local_client = OllamaClient(

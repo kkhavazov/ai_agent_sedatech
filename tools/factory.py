@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from services.order_service import OrderService
 from services.item_service import ItemService
+from services.missing_service import MissingComponentService
 from tools.registry import ToolDefinition, ToolRegistry
 from tools.order_tools import build_get_order_tool
 from tools.orders.filter_orders import (
@@ -18,11 +19,16 @@ from tools.current_time_tools import (
     create_current_time_handler,
     GetCurrentTimeArgs,
 )
+from tools.missing_component_tools import (
+    build_find_missing_components_tool,
+    build_find_open_order_missing_components_tool,
+)
 
 
 def build_tool_registry(
     order_service: OrderService,
     item_service: ItemService | None = None,
+    missing_component_service: MissingComponentService | None = None,
 ) -> ToolRegistry:
     registry = ToolRegistry()
     registry.register(build_get_order_tool(order_service))
@@ -76,6 +82,15 @@ def build_tool_registry(
                 ),
                 arguments_model=SearchItemsArguments,
                 handler=create_search_items_handler(item_service),
+            )
+        )
+    if missing_component_service is not None:
+        registry.register(
+            build_find_missing_components_tool(missing_component_service)
+        )
+        registry.register(
+            build_find_open_order_missing_components_tool(
+                missing_component_service
             )
         )
     registry.register(
