@@ -60,6 +60,8 @@ class SqlServerItemRepository(ItemRepository):
         cpu_manufacturer: Literal["Intel", "AMD"] | None = None,
         cpu_generation: int | None = None,
         cpu_model: str | None = None,
+        hdd_capacity: int | None = None,
+        hdd_type: Literal["HDD", "SSD"] | None = None,
     ) -> int:
         filters: list[str] = []
         parameters: list[Any] = []
@@ -119,6 +121,20 @@ class SqlServerItemRepository(ItemRepository):
             else:
                 filters.append("ART.Bezeichnung LIKE %s")
                 parameters.append("AMD Ryzen %")
+        if category == "HD":
+            if hdd_type:
+                if hdd_type == "HDD":
+                    filters.append("ART.Bezeichnung LIKE %s")
+                    if hdd_capacity:
+                        parameters.append(f"{hdd_capacity}Gb HDD%")
+                    else:
+                        parameters.append(f"%HDD%")
+                elif hdd_type == "SSD":
+                    filters.append("ART.Bezeichnung LIKE %s")
+                    if hdd_capacity:
+                        parameters.append(f"{hdd_capacity}Gb SSD%")
+                    else:
+                        parameters.append(f"%SSD%")
         where_sql = "WHERE " + " AND ".join(
             [
                 "SERIE.SCTyp <> 'O'",

@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field, model_validator
 from services.item_service import ItemService
 
 ManufacturerType = Literal["Intel", "AMD"]
+StorageType = Literal["SSD", "HDD"]
 
 class SearchItemsArguments(BaseModel):
     sku: str | None = Field(
@@ -78,6 +79,22 @@ class SearchItemsArguments(BaseModel):
             "ALWAYS use exact model name, not a partial name. "
         ),
     )
+    hdd_type: StorageType | None = Field(
+        default=None,
+        description=(
+            "Type of the storage, 'SSD' or 'HDD'."
+        ),
+        min_length=1,
+        max_length=100,
+    )
+    hdd_capacity: int | None = Field(
+        default=None,
+        description=(
+            "SSD capacity in GB, for example 1000 or 2000 etc. "
+            "Round all the numbers, for example 2tb = 2000Gb"
+            "This automatically selects category HD (SSDs and Hard Drives)."
+        ),
+    )
 
     @model_validator(mode="after")
     def validate_and_normalize_filters(self) -> "SearchItemsArguments":
@@ -90,6 +107,13 @@ class SearchItemsArguments(BaseModel):
             elif self.category != "ME":
                 raise ValueError(
                     "ram_capacity and ram_ddr can only be used with RAM."
+                )
+        if self.hdd_capacity is not None or self.hdd_capacity is not None:
+            if self.category is None:
+                self.category = "HD"
+            elif self.category != "HD":
+                raise ValueError(
+                    "hdd_capacity and hdd_type can only be used with Hard drives and SSDs."
                 )
         if any(
             value is not None
@@ -116,6 +140,8 @@ class SearchItemsArguments(BaseModel):
                 self.cpu_manufacturer,
                 self.cpu_generation,
                 self.cpu_model,
+                self.hdd_capacity,
+                self.hdd_type,
             )
         ):
             raise ValueError("At least one item filter must be provided.")
@@ -153,6 +179,8 @@ def create_search_items_handler(item_service: ItemService):
         cpu_manufacturer: Literal["Intel", "AMD"] | None = None,
         cpu_generation: int | None = None,
         cpu_model: str | int | None = None,
+        hdd_capacity: int | None = None,
+        hdd_type: Literal["HDD", "SSD"] | None = None,
     ) -> dict[str, Any]:
         # Validate and normalize inputs using SearchItemsArguments
         args = SearchItemsArguments(
@@ -165,6 +193,8 @@ def create_search_items_handler(item_service: ItemService):
             cpu_generation=cpu_generation,
             cpu_manufacturer=cpu_manufacturer,
             cpu_model=cpu_model,
+            hdd_capacity=hdd_capacity,
+            hdd_type=hdd_type,
         )
 
 
@@ -178,6 +208,8 @@ def create_search_items_handler(item_service: ItemService):
             cpu_generation=args.cpu_generation,
             cpu_manufacturer=args.cpu_manufacturer,
             cpu_model=args.cpu_model,
+            hdd_capacity=args.hdd_capacity,
+            hdd_type=args.hdd_type,
         )
         return {
             "requested_filters": {
@@ -190,6 +222,8 @@ def create_search_items_handler(item_service: ItemService):
                 "cpu_generation": args.cpu_generation,
                 "cpu_manufacturer": args.cpu_manufacturer,
                 "cpu_model": args.cpu_model,
+                "hdd_capacity": args.hdd_capacity,
+                "hdd_type": args.hdd_type,
             },
             "amount": result,
         }

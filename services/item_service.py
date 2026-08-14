@@ -23,6 +23,8 @@ class ItemService:
         cpu_manufacturer: Literal["Intel", "AMD"] | None = None,
         cpu_generation: int | None = None,
         cpu_model: str | None = None,
+        hdd_capacity: int | None = None,
+        hdd_type: Literal["HDD", "SSD"] | None = None,
     ) -> int:
         has_filter = any(
             [
@@ -35,6 +37,8 @@ class ItemService:
                 cpu_generation,
                 cpu_manufacturer,
                 cpu_model,
+                hdd_capacity,
+                hdd_type,
             ]
         )
 
@@ -53,4 +57,6 @@ class ItemService:
             cpu_generation = cpu_generation,
             cpu_manufacturer = cpu_manufacturer,
             cpu_model = cpu_model,
+            hdd_capacity=hdd_capacity,
+            hdd_type=hdd_type,
         )
