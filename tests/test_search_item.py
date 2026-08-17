@@ -124,3 +124,50 @@ def test_demo_repository_accepts_cpu_filters() -> None:
     )
 
     assert result["amount"] == 0
+
+
+def test_case_fields_infer_category_and_normalize_inventory_names() -> None:
+    arguments = SearchItemsArguments(
+        case_manufacturer=" coolermaster ",
+        case_model="elite 302",
+    )
+
+    assert arguments.category == "TW"
+    assert arguments.case_manufacturer == "CoolerMaster"
+    assert arguments.case_model == "Elite 302"
+
+
+def test_case_model_requires_manufacturer() -> None:
+    with pytest.raises(ValidationError):
+        SearchItemsArguments(case_model="Elite 302")
+
+
+def test_case_model_must_belong_to_manufacturer() -> None:
+    with pytest.raises(ValidationError):
+        SearchItemsArguments(
+            case_manufacturer="Corsair",
+            case_model="Elite 302",
+        )
+
+
+def test_case_fields_reject_conflicting_category() -> None:
+    with pytest.raises(ValidationError):
+        SearchItemsArguments(
+            category="CP",
+            case_manufacturer="CoolerMaster",
+        )
+
+
+def test_case_handler_forwards_normalized_filters() -> None:
+    repository = StubItemRepository()
+    handler = create_search_items_handler(ItemService(repository))
+
+    result = handler(
+        case_manufacturer="coolermaster",
+        case_model="elite 302",
+    )
+
+    assert repository.filters["category"] == "TW"
+    assert repository.filters["case_manufacturer"] == "CoolerMaster"
+    assert repository.filters["case_model"] == "Elite 302"
+    assert result["requested_filters"]["case_model"] == "Elite 302"

@@ -5,6 +5,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
+from repositories.sqlserver_item_repository import case_inventory
 from services.item_service import ItemService
 
 ManufacturerType = Literal["Intel", "AMD"]
@@ -95,6 +96,25 @@ class SearchItemsArguments(BaseModel):
             "This automatically selects category HD (SSDs and Hard Drives)."
         ),
     )
+    case_manufacturer: str | None = Field(
+        default=None,
+        description=(
+            "Case manufacturer from the available inventory, for example "
+            "CoolerMaster, Corsair, or Fractal Design. This automatically "
+            "selects category TW (case)."
+        ),
+        min_length=1,
+        max_length=100,
+    )
+    case_model: str | None = Field(
+        default=None,
+        description=(
+            "Exact case model from the available inventory, without the "
+            "manufacturer; for example Elite 302. case_manufacturer is required."
+        ),
+        min_length=1,
+        max_length=100,
+    )
 
     @model_validator(mode="after")
     def validate_and_normalize_filters(self) -> "SearchItemsArguments":
@@ -108,7 +128,7 @@ class SearchItemsArguments(BaseModel):
                 raise ValueError(
                     "ram_capacity and ram_ddr can only be used with RAM."
                 )
-        if self.hdd_capacity is not None or self.hdd_capacity is not None:
+        if self.hdd_capacity is not None or self.hdd_type is not None:
             if self.category is None:
                 self.category = "HD"
             elif self.category != "HD":
@@ -129,6 +149,13 @@ class SearchItemsArguments(BaseModel):
                 raise ValueError(
                     "cpu_manufacturer, cpu_generation, cpu_model can only be used with CPU."
                 )
+        if self.case_manufacturer is not None or self.case_model is not None:
+            if self.category is None:
+                self.category = "TW"
+            elif self.category != "TW":
+                raise ValueError(
+                    "case_manufacturer and case_model can only be used with cases."
+                )
         if not any(
             (
                 self.sku,
@@ -142,9 +169,45 @@ class SearchItemsArguments(BaseModel):
                 self.cpu_model,
                 self.hdd_capacity,
                 self.hdd_type,
+                self.case_manufacturer,
+                self.case_model,
             )
         ):
             raise ValueError("At least one item filter must be provided.")
+
+        if self.case_model is not None and self.case_manufacturer is None:
+            raise ValueError(
+                "case_manufacturer is required when case_model is provided"
+            )
+        if self.case_manufacturer is not None:
+            requested_manufacturer = self.case_manufacturer.strip().casefold()
+            manufacturer = next(
+                (
+                    available
+                    for available in case_inventory
+                    if available.casefold() == requested_manufacturer
+                ),
+                None,
+            )
+            if manufacturer is None:
+                raise ValueError("case_manufacturer is not in case_inventory")
+            self.case_manufacturer = manufacturer
+
+            if self.case_model is not None:
+                requested_model = self.case_model.strip().casefold()
+                model = next(
+                    (
+                        available.strip()
+                        for available in case_inventory[manufacturer]
+                        if available.strip().casefold() == requested_model
+                    ),
+                    None,
+                )
+                if model is None:
+                    raise ValueError(
+                        "case_model is not available for case_manufacturer"
+                    )
+                self.case_model = model
 
         if self.cpu_model is not None:
             if self.cpu_manufacturer is None:
@@ -181,6 +244,8 @@ def create_search_items_handler(item_service: ItemService):
         cpu_model: str | int | None = None,
         hdd_capacity: int | None = None,
         hdd_type: Literal["HDD", "SSD"] | None = None,
+        case_manufacturer: str | None = None,
+        case_model: str | None = None,
     ) -> dict[str, Any]:
         # Validate and normalize inputs using SearchItemsArguments
         args = SearchItemsArguments(
@@ -195,6 +260,8 @@ def create_search_items_handler(item_service: ItemService):
             cpu_model=cpu_model,
             hdd_capacity=hdd_capacity,
             hdd_type=hdd_type,
+            case_manufacturer=case_manufacturer,
+            case_model=case_model,
         )
 
 
@@ -210,6 +277,8 @@ def create_search_items_handler(item_service: ItemService):
             cpu_model=args.cpu_model,
             hdd_capacity=args.hdd_capacity,
             hdd_type=args.hdd_type,
+            case_manufacturer=args.case_manufacturer,
+            case_model=args.case_model,
         )
         return {
             "requested_filters": {
@@ -224,6 +293,8 @@ def create_search_items_handler(item_service: ItemService):
                 "cpu_model": args.cpu_model,
                 "hdd_capacity": args.hdd_capacity,
                 "hdd_type": args.hdd_type,
+                "case_manufacturer": args.case_manufacturer,
+                "case_model": args.case_model,
             },
             "amount": result,
         }

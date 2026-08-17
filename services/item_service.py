@@ -25,6 +25,8 @@ class ItemService:
         cpu_model: str | None = None,
         hdd_capacity: int | None = None,
         hdd_type: Literal["HDD", "SSD"] | None = None,
+        case_manufacturer: str | None = None,
+        case_model: str | None = None,
     ) -> int:
         has_filter = any(
             [
@@ -39,6 +41,8 @@ class ItemService:
                 cpu_model,
                 hdd_capacity,
                 hdd_type,
+                case_manufacturer,
+                case_model,
             ]
         )
 
@@ -59,4 +63,6 @@ class ItemService:
             cpu_model = cpu_model,
             hdd_capacity=hdd_capacity,
             hdd_type=hdd_type,
+            case_manufacturer=case_manufacturer,
+            case_model=case_model,
         )

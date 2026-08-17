@@ -26,6 +26,10 @@ class DemoItemRepository(ItemRepository):
         cpu_generation: int | None = None,
         cpu_model: int | None = None,
         cpu_prefix: str | None = None,
+        hdd_capacity: int | None = None,
+        hdd_type: Literal["HDD", "SSD"] | None = None,
+        case_manufacturer: str | None = None,
+        case_model: str | None = None,
     ) -> int:
         items = self._items
         if sku:
@@ -38,7 +42,16 @@ class DemoItemRepository(ItemRepository):
             items = []
         if any(
             value is not None
-            for value in (cpu_manufacturer, cpu_generation, cpu_model, cpu_prefix)
+            for value in (
+                cpu_manufacturer,
+                cpu_generation,
+                cpu_model,
+                cpu_prefix,
+                hdd_capacity,
+                hdd_type,
+                case_manufacturer,
+                case_model,
+            )
         ):
             items = []
         if ram_capacity is not None:

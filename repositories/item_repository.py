@@ -19,5 +19,7 @@ class ItemRepository(ABC):
         cpu_model: str | None = None,
         hdd_capacity: int | None = None,
         hdd_type: Literal["HDD", "SSD"] | None = None,
+        case_manufacturer: str | None = None,
+        case_model: str | None = None,
     ) -> int:
         raise NotImplementedError

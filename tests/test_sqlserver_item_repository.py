@@ -94,3 +94,30 @@ def test_partial_cpu_search_is_filtered() -> None:
     repository.search_inventory(category="CP", cpu_manufacturer="AMD")
 
     assert cursor.parameters[-1] == "AMD Ryzen %"
+
+
+def test_case_search_matches_exact_name_or_trailing_description() -> None:
+    repository, cursor = make_repository()
+
+    repository.search_inventory(
+        category="TW",
+        case_manufacturer="CoolerMaster",
+        case_model="Elite 302",
+    )
+
+    assert cursor.parameters[-2:] == (
+        "CoolerMaster Elite 302",
+        "CoolerMaster Elite 302 %",
+    )
+    assert "ART.Bezeichnung = %s OR ART.Bezeichnung LIKE %s" in cursor.query
+
+
+def test_case_manufacturer_search_uses_name_prefix() -> None:
+    repository, cursor = make_repository()
+
+    repository.search_inventory(
+        category="TW",
+        case_manufacturer="CoolerMaster",
+    )
+
+    assert cursor.parameters[-1] == "CoolerMaster %"
