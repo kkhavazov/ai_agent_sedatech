@@ -5,13 +5,22 @@ class FakeCursor:
     def __init__(self) -> None:
         self.query = ""
         self.parameters = ()
+        self.executions = []
 
     def execute(self, query, parameters) -> None:
         self.query = query
         self.parameters = parameters
+        self.executions.append((query, parameters))
 
     def fetchone(self):
-        return {"ItemCount": 12}
+        if "ItemCount" in self.query:
+            return {
+                "ItemCount": 12,
+                "MinimumPrice": 100,
+                "MaximumPrice": 300,
+                "AveragePrice": 200,
+            }
+        return {"OrderedAmount": 4}
 
     def close(self) -> None:
         pass
@@ -38,19 +47,22 @@ def make_repository():
 def test_amd_cpu_search_uses_cpu_manufacturer_and_prefix_match() -> None:
     repository, cursor = make_repository()
 
-    amount = repository.search_inventory(
+    result = repository.search_inventory(
         category="CP",
         cpu_manufacturer="AMD",
         cpu_generation=9,
         cpu_model="9900X",
     )
 
-    assert amount == 12
+    assert result.amount == 12
+    assert result.ordered == 4
+    assert result.minimum_price == 100.0
     assert cursor.parameters[-2:] == (
         "AMD Ryzen 9 9900X",
         "AMD Ryzen 9 9900X %",
     )
-    assert "SUM(LAGERP.Bestand)" in cursor.query
+    assert "SUM(LAGERP.Bestand)" in cursor.executions[0][0]
+    assert "SUM(BELEGP.Menge)" in cursor.executions[1][0]
 
 
 def test_intel_cpu_search_matches_names_with_or_without_description() -> None:

@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Literal
 
 from models.order import OrderItem
+from models.item import ItemsSearchResponse
 from repositories.item_repository import ItemRepository
 
 
@@ -22,6 +23,7 @@ class DemoItemRepository(ItemRepository):
         item_name: str | None = None,
         ram_capacity: int | None = None,
         ram_ddr: int | None = None,
+        ram_speed: int | None = None,
         cpu_manufacturer: Literal["Intel", "AMD"] | None = None,
         cpu_generation: int | None = None,
         cpu_model: int | None = None,
@@ -30,7 +32,7 @@ class DemoItemRepository(ItemRepository):
         hdd_type: Literal["HDD", "SSD"] | None = None,
         case_manufacturer: str | None = None,
         case_model: str | None = None,
-    ) -> int:
+    ) -> ItemsSearchResponse:
         items = self._items
         if sku:
             items = [item for item in items if sku.casefold() in item.sku.casefold()]
@@ -61,4 +63,17 @@ class DemoItemRepository(ItemRepository):
                 for item in items
                 if item.name.casefold().startswith(capacity_prefix)
             ]
-        return len(items)
+        if ram_ddr is not None:
+            ddr_marker = f"DDR{ram_ddr}".casefold()
+            items = [item for item in items if ddr_marker in item.name.casefold()]
+        if ram_speed is not None:
+            speed_marker = str(ram_speed)
+            items = [item for item in items if speed_marker in item.name]
+        prices = [item.price for item in items if item.price is not None]
+        return ItemsSearchResponse(
+            amount=sum(item.quantity for item in items),
+            ordered=0,
+            minimum_price=min(prices, default=0.0),
+            maximum_price=max(prices, default=0.0),
+            average_price=sum(prices) / len(prices) if prices else 0.0,
+        )

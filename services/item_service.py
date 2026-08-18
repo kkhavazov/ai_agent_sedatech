@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Literal
 
+from models.item import ItemsSearchResponse
 from repositories.item_repository import ItemRepository
 
 class ItemNotFoundError(LookupError):
@@ -20,6 +21,7 @@ class ItemService:
         item_name: str | None = None,
         ram_capacity: int | None = None,
         ram_ddr: int | None = None,
+        ram_speed: int | None = None,
         cpu_manufacturer: Literal["Intel", "AMD"] | None = None,
         cpu_generation: int | None = None,
         cpu_model: str | None = None,
@@ -27,7 +29,7 @@ class ItemService:
         hdd_type: Literal["HDD", "SSD"] | None = None,
         case_manufacturer: str | None = None,
         case_model: str | None = None,
-    ) -> int:
+    ) -> ItemsSearchResponse:
         has_filter = any(
             [
                 sku,
@@ -36,6 +38,7 @@ class ItemService:
                 item_name,
                 ram_capacity,
                 ram_ddr,
+                ram_speed,
                 cpu_generation,
                 cpu_manufacturer,
                 cpu_model,
@@ -58,6 +61,7 @@ class ItemService:
             item_name=item_name,
             ram_capacity=ram_capacity,
             ram_ddr=ram_ddr,
+            ram_speed=ram_speed,
             cpu_generation = cpu_generation,
             cpu_manufacturer = cpu_manufacturer,
             cpu_model = cpu_model,

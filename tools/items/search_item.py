@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from dataclasses import asdict
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
@@ -56,6 +57,15 @@ class SearchItemsArguments(BaseModel):
         ),
         ge=1,
         le=5,
+    )
+    ram_speed: int | None = Field(
+        default=None,
+        description=(
+            "RAMs speed as a whoke number, for example 5600 or 6000. "
+            "This automatically selects category ME (RAM)."
+        ),
+        ge=800,
+        le=10000,
     )
     cpu_manufacturer: ManufacturerType | None = Field(
         default=None,
@@ -121,12 +131,12 @@ class SearchItemsArguments(BaseModel):
         if self.category is not None:
             self.category = self.category.strip().upper()
 
-        if self.ram_capacity is not None or self.ram_ddr is not None:
+        if self.ram_capacity is not None or self.ram_ddr is not None or self.ram_speed is not None:
             if self.category is None:
                 self.category = "ME"
             elif self.category != "ME":
                 raise ValueError(
-                    "ram_capacity and ram_ddr can only be used with RAM."
+                    "ram_capacity, ram_ddr and ram_speed can only be used with RAM."
                 )
         if self.hdd_capacity is not None or self.hdd_type is not None:
             if self.category is None:
@@ -164,6 +174,7 @@ class SearchItemsArguments(BaseModel):
                 self.category,
                 self.ram_capacity,
                 self.ram_ddr,
+                self.ram_speed,
                 self.cpu_manufacturer,
                 self.cpu_generation,
                 self.cpu_model,
@@ -239,6 +250,7 @@ def create_search_items_handler(item_service: ItemService):
         item_name: str | None = None,
         ram_capacity: int | None = None,
         ram_ddr: int | None = None,
+        ram_speed: int | None = None,
         cpu_manufacturer: Literal["Intel", "AMD"] | None = None,
         cpu_generation: int | None = None,
         cpu_model: str | int | None = None,
@@ -255,6 +267,7 @@ def create_search_items_handler(item_service: ItemService):
             item_name=item_name,
             ram_capacity=ram_capacity,
             ram_ddr=ram_ddr,
+            ram_speed=ram_speed,
             cpu_generation=cpu_generation,
             cpu_manufacturer=cpu_manufacturer,
             cpu_model=cpu_model,
@@ -272,6 +285,7 @@ def create_search_items_handler(item_service: ItemService):
             item_name=args.item_name,
             ram_capacity=args.ram_capacity,
             ram_ddr=args.ram_ddr,
+            ram_speed=args.ram_speed,
             cpu_generation=args.cpu_generation,
             cpu_manufacturer=args.cpu_manufacturer,
             cpu_model=args.cpu_model,
@@ -288,6 +302,7 @@ def create_search_items_handler(item_service: ItemService):
                 "item_name": args.item_name,
                 "ram_capacity": args.ram_capacity,
                 "ram_ddr": args.ram_ddr,
+                "ram_speed": args.ram_speed,
                 "cpu_generation": args.cpu_generation,
                 "cpu_manufacturer": args.cpu_manufacturer,
                 "cpu_model": args.cpu_model,
@@ -296,7 +311,7 @@ def create_search_items_handler(item_service: ItemService):
                 "case_manufacturer": args.case_manufacturer,
                 "case_model": args.case_model,
             },
-            "amount": result,
+            **asdict(result),
         }
 
     return search_items_handler

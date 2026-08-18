@@ -3,6 +3,8 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Literal
 
+from models.item import ItemsSearchResponse
+
 class ItemRepository(ABC):
     @abstractmethod
     def search_inventory(
@@ -14,6 +16,7 @@ class ItemRepository(ABC):
         item_name: str | None = None,
         ram_capacity: int | None = None,
         ram_ddr: int | None = None,
+        ram_speed: int | None = None,
         cpu_manufacturer: Literal["Intel", "AMD"] | None = None,
         cpu_generation: int | None = None,
         cpu_model: str | None = None,
@@ -21,5 +24,5 @@ class ItemRepository(ABC):
         hdd_type: Literal["HDD", "SSD"] | None = None,
         case_manufacturer: str | None = None,
         case_model: str | None = None,
-    ) -> int:
+    ) -> ItemsSearchResponse:
         raise NotImplementedError

@@ -7,6 +7,8 @@ import pymssql
 
 from repositories.item_repository import ItemRepository
 
+from models.item import ItemsSearchResponse
+
 
 logger = logging.getLogger(__name__)
 
@@ -238,6 +240,7 @@ class SqlServerItemRepository(ItemRepository):
         item_name: str | None = None,
         ram_capacity: int | None = None,
         ram_ddr: int | None = None,
+        ram_speed: int | None = None,
         cpu_manufacturer: Literal["Intel", "AMD"] | None = None,
         cpu_generation: int | None = None,
         cpu_model: str | None = None,
@@ -245,7 +248,7 @@ class SqlServerItemRepository(ItemRepository):
         hdd_type: Literal["HDD", "SSD"] | None = None,
         case_manufacturer: str | None = None,
         case_model: str | None = None,
-    ) -> int:
+    ) -> ItemsSearchResponse:
         filters: list[str] = []
         parameters: list[Any] = []
 
@@ -265,6 +268,9 @@ class SqlServerItemRepository(ItemRepository):
             if ram_ddr is not None:
                 filters.append("ART.Bezeichnung LIKE %s")
                 parameters.append(f"%DDR{ram_ddr}%")
+            if ram_speed is not None:
+                filters.append("ART.Bezeichnung LIKE %s")
+                parameters.append(f"%{ram_speed}%")
         if category == "CP" and cpu_manufacturer:
             gen = str(cpu_generation).strip() if cpu_generation is not None else ""
             model = str(cpu_model).strip() if cpu_model is not None else ""
@@ -336,15 +342,36 @@ class SqlServerItemRepository(ItemRepository):
                 *filters,
             ]
         )
+        where_sql_sum = "WHERE " + " AND ".join(
+            [
+                "BELEG.Belegtyp = 'B'",
+                "BELEG.UebernahmeOffen < 0",
+                "BELEGP.Artikelnummer IN ("
+                "SELECT DISTINCT SERIE.Artikelnummer "
+                "FROM dbo.LAGERP "
+                "INNER JOIN SERIE ON SERIE.Id = LAGERP.IdSerie "
+                "INNER JOIN ART ON ART.Artikelnummer = SERIE.Artikelnummer "
+                "WHERE LAGERP.Wert <> 0"
+                + (" AND " + " AND ".join(filters) if filters else "")
+                + ")",
+            ]
+        )
         from_sql = """
             FROM dbo.LAGERP
             INNER JOIN SERIE ON SERIE.Id = LAGERP.IdSerie
             INNER JOIN ART ON ART.Artikelnummer = SERIE.Artikelnummer
         """
         count_query = f"""
-            SELECT COALESCE(SUM(LAGERP.Bestand), 0) AS ItemCount
+            SELECT COALESCE(SUM(LAGERP.Bestand), 0) AS ItemCount, MIN(LAGERP.Wert) AS MinimumPrice, MAX(LAGERP.Wert) AS MaximumPrice, AVG(LAGERP.Wert) AS AveragePrice
             {from_sql}
             {where_sql}
+        """
+        sum_sql = f"""
+            SELECT COALESCE(SUM(BELEGP.Menge), 0) AS OrderedAmount
+            FROM BELEG
+            INNER JOIN BELEGP ON BELEGP.Belegnummer = BELEG.Belegnummer
+            INNER JOIN ART ON ART.Artikelnummer = BELEGP.Artikelnummer
+            {where_sql_sum}
         """
 
         connection = None
@@ -354,6 +381,8 @@ class SqlServerItemRepository(ItemRepository):
             cursor = connection.cursor()
             cursor.execute(count_query, tuple(parameters))
             count_row = cursor.fetchone()
+            cursor.execute(sum_sql, tuple(parameters))
+            sum_row = cursor.fetchone()
         except pymssql.Error as exc:
             logger.exception("Inventory search failed")
             raise RuntimeError(
@@ -365,4 +394,12 @@ class SqlServerItemRepository(ItemRepository):
             if connection is not None:
                 connection.close()
 
-        return int(count_row["ItemCount"]) if count_row else 0
+        total_amount = int(count_row["ItemCount"]) if count_row else 0
+        ordered_amount = int(sum_row["OrderedAmount"]) if sum_row else 0
+        return ItemsSearchResponse(
+            amount=total_amount,
+            ordered=ordered_amount,
+            minimum_price=float(count_row["MinimumPrice"] or 0) if count_row else 0.0,
+            maximum_price=float(count_row["MaximumPrice"] or 0) if count_row else 0.0,
+            average_price=float(count_row["AveragePrice"] or 0) if count_row else 0.0,
+        )

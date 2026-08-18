@@ -1,6 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
+from models.item import ItemsSearchResponse
 from repositories.demo_item_repository import DemoItemRepository
 from services.item_service import ItemService
 from tools.items.search_item import (
@@ -13,9 +14,9 @@ class StubItemRepository:
     def __init__(self) -> None:
         self.filters = {}
 
-    def search_inventory(self, **filters) -> int:
+    def search_inventory(self, **filters) -> ItemsSearchResponse:
         self.filters = filters
-        return 7
+        return ItemsSearchResponse(7, 3, 10.0, 20.0, 15.0)
 
 
 def test_search_item_handler_returns_amount() -> None:
@@ -25,6 +26,8 @@ def test_search_item_handler_returns_amount() -> None:
     result = handler(category="ME", ram_capacity=32)
 
     assert result["amount"] == 7
+    assert result["ordered"] == 3
+    assert result["minimum_price"] == 10.0
     assert result["requested_filters"]["ram_capacity"] == 32
     assert repository.filters["ram_capacity"] == 32
 
@@ -33,6 +36,19 @@ def test_ram_fields_infer_ram_category() -> None:
     arguments = SearchItemsArguments(ram_capacity=16, ram_ddr=4)
 
     assert arguments.category == "ME"
+
+
+def test_ram_handler_forwards_speed_filter() -> None:
+    repository = StubItemRepository()
+    handler = create_search_items_handler(ItemService(repository))
+
+    result = handler(ram_capacity=16, ram_ddr=5, ram_speed=6000)
+
+    assert repository.filters["category"] == "ME"
+    assert repository.filters["ram_capacity"] == 16
+    assert repository.filters["ram_ddr"] == 5
+    assert repository.filters["ram_speed"] == 6000
+    assert result["requested_filters"]["ram_speed"] == 6000
 
 
 def test_ram_fields_reject_conflicting_category() -> None:
