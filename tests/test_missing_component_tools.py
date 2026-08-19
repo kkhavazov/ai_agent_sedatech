@@ -11,18 +11,26 @@ class StubMissingRepository(MissingRepository):
     def find_missing_components(
         self,
         order_number: str,
-    ) -> list[MissingComponent] | None:
+    ) -> MissingComponent | None:
         if order_number == "LS100":
-            return [MissingComponent(order_number, "CP123")]
+            return MissingComponent(
+                order_number,
+                [{"ID": "CP123", "count": 1}],
+            )
         return None
 
     def find_missing_components_for_open_orders(
         self,
     ) -> list[MissingComponent] | None:
         return [
-            MissingComponent("LS100", "CP123"),
-            MissingComponent("LS100", "ME456"),
-            MissingComponent("LS200", "MB789"),
+            MissingComponent(
+                "LS100",
+                [
+                    {"ID": "CP123", "count": 1},
+                    {"ID": "ME456", "count": 2},
+                ],
+            ),
+            MissingComponent("LS200", [{"ID": "MB789", "count": 1}]),
         ]
 
 
@@ -35,9 +43,10 @@ def test_find_missing_components_tool_serializes_results() -> None:
     assert result == {
         "order_number": "LS100",
         "has_missing_components": True,
-        "missing_components": [
-            {"order_number": "LS100", "component": "CP123"}
-        ],
+        "missing_components": {
+            "order_number": "LS100",
+            "components": [{"ID": "CP123", "count": 1}],
+        },
     }
 
 
@@ -48,7 +57,7 @@ def test_find_missing_components_tool_reports_no_missing_items() -> None:
     result = tool.handler(order_number="LS999")
 
     assert result["has_missing_components"] is False
-    assert result["missing_components"] == []
+    assert result["missing_components"] is None
 
 
 def test_open_order_tool_groups_affected_orders() -> None:
@@ -59,4 +68,4 @@ def test_open_order_tool_groups_affected_orders() -> None:
 
     assert result["affected_order_count"] == 2
     assert result["affected_orders"] == ["LS100", "LS200"]
-    assert len(result["missing_components"]) == 3
+    assert len(result["missing_components"]) == 2

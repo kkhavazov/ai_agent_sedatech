@@ -5,59 +5,9 @@ import re
 
 import pymssql
 
-from models.item import MissingComponent, MissingComponentEntry
+from models.item import MissingComponent
 from repositories.missing_repository import MissingRepository
 
-
-
-from collections import defaultdict
-
-def get_group(item_id: str) -> str:
-  # Extracts the alphabetical prefix (e.g., 'ME' from 'ME0001')
-  match = re.match(r"^([A-Za-z]+)", item_id)
-  return match.group(1) if match else item_id
-
-def compare_dict_lists(
-    list_1: list[dict],
-    list_2: list[dict],
-    id_key: str = "ID",
-    count_key: str = "count",
-) -> list[MissingComponentEntry]:
-    dict_1 = defaultdict(int)
-    dict_2 = defaultdict(int)
-    original_ids = {}  # Keeps track of an original ID for each group
-
-    # Aggregate list 1 and store a representative original ID
-    for item in list_1:
-        orig_id = item[id_key]
-        group = get_group(orig_id)
-        dict_1[group] += item[count_key]
-        if group not in original_ids:
-            original_ids[group] = orig_id
-
-    # Aggregate list 2 and store a representative original ID if not already tracked
-    for item in list_2:
-        orig_id = item[id_key]
-        group = get_group(orig_id)
-        dict_2[group] += item[count_key]
-        if group not in original_ids:
-            original_ids[group] = orig_id
-
-    result: list[MissingComponentEntry] = []
-    all_groups = set(dict_1.keys()).union(set(dict_2.keys()))
-
-    # Compare counts for every unique group
-    for group in all_groups:
-        c1 = dict_1[group]
-        c2 = dict_2[group]
-
-        if c1 != c2:
-            diff = abs(c2 - c1)
-            # Use the stored original ID instead of just the prefix
-            rep_id = original_ids[group]
-            result.append({id_key: rep_id, count_key: diff})
-
-    return result
 
 class SqlServerMissingRepository(MissingRepository):
     def __init__(
@@ -99,20 +49,18 @@ class SqlServerMissingRepository(MissingRepository):
     def find_missing_components(
         self,
         order_number: str,
-    ) -> MissingComponent | None:
-        query_werstatt = """
-            SELECT LieferBelegNr, Belegnummer
-            FROM BELEG
-            WHERE Belegnummer = %s
-        """
-        query_auge = """
-            SELECT Artikelnummer AS ID, Menge AS count
-            FROM BELEGP t1
-            INNER JOIN BELEG AS t2 ON t1.Belegnummer = t2.Belegnummer
-            WHERE t1.Belegnummer = %s
+    ) -> list[MissingComponent] | None:
+        query_items = """
+            SELECT t1.Text AS NoteText
+            FROM NOTIZ t1 WITH (NOLOCK)
+            INNER JOIN Adress t2 WITH (NOLOCK)
+                ON t1.Blobkey = t2.Adresstyp
+            INNER JOIN BELEG t3 WITH (NOLOCK)
+                ON t2.Name = t3.Name
+            WHERE t3.Belegnummer = %s
         """
         query_order = """
-            SELECT Artikelnummer AS ID, Menge AS count
+            SELECT Artikelnummer
             FROM BELEGP
             WHERE Belegnummer = %s
             """
@@ -122,21 +70,14 @@ class SqlServerMissingRepository(MissingRepository):
         try:
             connection = self._connect()
             cursor = connection.cursor()
-            cursor.execute(query_werstatt, (order_number,))
-            werstatt_rows = cursor.fetchone()
-            if not werstatt_rows or not werstatt_rows.get("LieferBelegNr"):
-                return None
-
-            cursor.execute(query_werstatt, (werstatt_rows.get("LieferBelegNr"),))
-            more_rows = cursor.fetchone()
-            if not more_rows or not more_rows.get("LieferBelegNr"):
-                return None
-
-            cursor.execute(query_auge, (more_rows.get("LieferBelegNr"),))
-            original_comps = cursor.fetchall()
+            cursor.execute(query_items, (order_number,))
+            items_rows = cursor.fetchall()
             cursor.execute(query_order, (order_number,))
-            current_comps = cursor.fetchall()
-            
+            order_items = {
+                str(item["Artikelnummer"]).strip().upper()
+                for item in cursor.fetchall()
+                if item.get("Artikelnummer") is not None
+            }
 
         except pymssql.Error as exc:
             raise RuntimeError(f"SQL Server query failed: {exc}") from exc
@@ -148,12 +89,52 @@ class SqlServerMissingRepository(MissingRepository):
             if connection is not None:
                 connection.close()
 
-        comparison = compare_dict_lists(original_comps, current_comps)
-        if not comparison:
+        if not items_rows:
             return None
-        result = MissingComponent(order_number=order_number, components=comparison)
-        return result
 
+        item_categories = {
+            "CP", "ME", "MB", "BU", "FA", "GC", "HD", "TW", "PS",
+            "MO", "ZZ", "SW", "TF", "OP", "OPD", "OPB", "NW",
+        }
+        result: list[MissingComponent] = []
+        seen: set[str] = set()
+
+        for row in items_rows:
+            note_text = row.get("NoteText")
+            if not isinstance(note_text, str) or not re.search(
+                r"\bmissing\b", note_text, flags=re.IGNORECASE
+            ):
+                continue
+
+            components = re.findall(
+                r"\b[A-Za-z]{2,3}[A-Za-z0-9_-]*\b",
+                note_text,
+            )
+            for component in components:
+                normalized_component = component.upper()
+                category = next(
+                    (
+                        candidate
+                        for candidate in sorted(
+                            item_categories,
+                            key=len,
+                            reverse=True,
+                        )
+                        if normalized_component.startswith(candidate)
+                    ),
+                    None,
+                )
+                if category and normalized_component not in seen:
+                    seen.add(normalized_component)
+                    if normalized_component not in order_items:
+                        result.append(
+                            MissingComponent(
+                                order_number=order_number,
+                                component=component,
+                            )
+                        )
+
+        return result or None
 
     def find_missing_components_for_open_orders(
         self,
@@ -180,7 +161,7 @@ class SqlServerMissingRepository(MissingRepository):
                 if order_number:
                     missing_components = self.find_missing_components(order_number)
                     if missing_components:
-                        missing_components_list.append(missing_components)
+                        missing_components_list.extend(missing_components)
 
         except pymssql.Error as exc:
             raise RuntimeError(f"SQL Server query failed: {exc}") from exc
@@ -195,12 +176,10 @@ class SqlServerMissingRepository(MissingRepository):
         return missing_components_list or None
 
 if __name__ == "__main__":
-    from dotenv import load_dotenv
-    load_dotenv()
-    sqlserver_server = os.environ.get("SQLSERVER_SERVER") or None
-    sqlserver_user = os.environ.get("SQLSERVER_USER") or None
-    sqlserver_password = os.environ.get("SQLSERVER_PASSWORD") or None
-    sqlserver_database = os.environ.get("SQLSERVER_DATABASE") or None
+    sqlserver_server = os.getenv("SQLSERVER_SERVER") or None
+    sqlserver_user = os.getenv("SQLSERVER_USER") or None
+    sqlserver_password = os.getenv("SQLSERVER_PASSWORD") or None
+    sqlserver_database = os.getenv("SQLSERVER_DATABASE") or None
     sqlserver_tds_version: str = os.getenv(
         "SQLSERVER_TDS_VERSION",
         "7.0",
@@ -232,14 +211,6 @@ if __name__ == "__main__":
         tds_version=sqlserver_tds_version,
         port=sqlserver_port,
     )
-    order_number = "LS164077"
-
-    # list_1 = [("ME0001", 1), ("HD0001", 1)]
-    # list_2 = [("ME0001", 2), ("HD0001", 1), ("ME0002", 1)]
-
-    # print(compare_lists(list_1, list_2))
-    missing_components_order = repository.find_missing_components(order_number)
-    print(missing_components_order)
+    order_number = "LS164014"
     missing_components = repository.find_missing_components_for_open_orders()
     print(missing_components)
-    

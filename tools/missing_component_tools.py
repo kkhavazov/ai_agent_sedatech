@@ -24,11 +24,11 @@ def build_find_missing_components_tool(
     service: MissingComponentService,
 ) -> ToolDefinition:
     def find_missing_components(order_number: str) -> dict:
-        components = service.find_for_order(order_number)
+        result = service.find_for_order(order_number)
         return {
             "order_number": order_number.strip(),
-            "has_missing_components": bool(components),
-            "missing_components": [asdict(component) for component in components],
+            "has_missing_components": bool(result and result.components),
+            "missing_components": asdict(result) if result else None,
         }
 
     return ToolDefinition(

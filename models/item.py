@@ -1,9 +1,15 @@
 from dataclasses import dataclass
+from typing import TypedDict
+
+
+class MissingComponentEntry(TypedDict):
+    ID: str
+    count: int
 
 @dataclass(slots=True)
 class MissingComponent:
     order_number: str
-    component: str
+    components: list[MissingComponentEntry]
 
 @dataclass(slots=True)
 class ItemsSearchResponse:

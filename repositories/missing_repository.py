@@ -10,7 +10,7 @@ class MissingRepository(ABC):
     def find_missing_components(
         self,
         order_number: str,
-    ) -> list[MissingComponent] | None:
+    ) -> MissingComponent | None:
         raise NotImplementedError
 
     @abstractmethod
