@@ -133,3 +133,32 @@ def test_case_manufacturer_search_uses_name_prefix() -> None:
     )
 
     assert cursor.parameters[-1] == "CoolerMaster %"
+
+
+def test_gpu_search_uses_series_model_and_gigabyte_vram() -> None:
+    repository, cursor = make_repository()
+
+    repository.search_inventory(
+        category="GC",
+        gpu_manufacturer="NVIDIA",
+        gpu_series="GeForce",
+        gpu_model="RTX5070Ti",
+        gpu_vram=16,
+    )
+
+    assert cursor.parameters[-6:] == (
+        "%GC%",
+        "Geforce %",
+        "Quadro %",
+        "Nvidia %",
+        "%RTX5070Ti%",
+        "%16GB%",
+    )
+
+
+def test_two_gigabyte_gpu_search_uses_2048_mb() -> None:
+    repository, cursor = make_repository()
+
+    repository.search_inventory(category="GC", gpu_vram=2)
+
+    assert cursor.parameters[-1] == "%2048MB%"

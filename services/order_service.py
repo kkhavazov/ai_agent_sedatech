@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from datetime import date
+from typing import Any, Literal
+
 from models.order import Order
 from repositories.order_repository import OrderRepository
 
@@ -106,4 +109,23 @@ class OrderService:
             status=status,
             date_from=date_from,
             date_to=date_to,
+        )
+
+    def analyze_orders_data(
+        self,
+        *,
+        date_from: date | None = None,
+        date_to: date | None = None,
+        document_type: str | None = None,
+        status: int | None = None,
+        max_rows: int = 1000,
+    ) -> Any:
+        if date_from and date_to and date_from > date_to:
+            raise ValueError("date_from cannot be later than date_to")
+        return self.repository.analyze_orders_data(
+            date_from=date_from,
+            date_to=date_to,
+            document_type=document_type,
+            status=status,
+            max_rows=max(1, min(max_rows, 5000)),
         )

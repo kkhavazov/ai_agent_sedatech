@@ -32,6 +32,10 @@ class DemoItemRepository(ItemRepository):
         hdd_type: Literal["HDD", "SSD"] | None = None,
         case_manufacturer: str | None = None,
         case_model: str | None = None,
+        gpu_manufacturer: Literal["NVIDIA", "AMD"] | None = None,
+        gpu_series: Literal["GeForce", "Radeon", "Quadro", "Nvidia"] | None = None,
+        gpu_model: str | None = None,
+        gpu_vram: int | None = None,
     ) -> ItemsSearchResponse:
         items = self._items
         if sku:
@@ -53,6 +57,10 @@ class DemoItemRepository(ItemRepository):
                 hdd_type,
                 case_manufacturer,
                 case_model,
+                gpu_manufacturer,
+                gpu_series,
+                gpu_model,
+                gpu_vram,
             )
         ):
             items = []

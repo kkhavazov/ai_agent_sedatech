@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from datetime import date
+from typing import Any, Literal
 
 from models.order import Order, OrderItem
 
@@ -23,4 +25,17 @@ class OrderRepository(ABC):
         sort_order: Literal["newest", "oldest"] = "newest",
         limit: int = 20,
     ) -> list[Order]:
+        raise NotImplementedError
+
+    @abstractmethod
+    def analyze_orders_data(
+        self,
+        *,
+        date_from: date | None = None,
+        date_to: date | None = None,
+        document_type: str | None = None,
+        status: int | None = None,
+        max_rows: int = 1000,
+    ) -> Any:
+        """Return tabular order data for aggregate analysis."""
         raise NotImplementedError

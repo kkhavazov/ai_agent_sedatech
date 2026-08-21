@@ -11,7 +11,6 @@ class ItemRepository(ABC):
         self,
         *,
         sku: str | None = None,
-        manufacturer: str | None = None,
         category: str | None = None,
         item_name: str | None = None,
         ram_capacity: int | None = None,
@@ -24,5 +23,9 @@ class ItemRepository(ABC):
         hdd_type: Literal["HDD", "SSD"] | None = None,
         case_manufacturer: str | None = None,
         case_model: str | None = None,
+        gpu_manufacturer: Literal["NVIDIA", "AMD"] | None = None,
+        gpu_series: Literal["GeForce", "Radeon", "Quadro", "Nvidia"] | None = None,
+        gpu_model: str | None = None,
+        gpu_vram: int | None = None,
     ) -> ItemsSearchResponse:
         raise NotImplementedError

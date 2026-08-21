@@ -11,6 +11,8 @@ from services.item_service import ItemService
 
 ManufacturerType = Literal["Intel", "AMD"]
 StorageType = Literal["SSD", "HDD"]
+GPUManufacturerType = Literal["NVIDIA", "AMD"]
+GPUSeriesType = Literal["GeForce", "Radeon", "Quadro", "Nvidia"]
 
 class SearchItemsArguments(BaseModel):
     sku: str | None = Field(
@@ -22,12 +24,6 @@ class SearchItemsArguments(BaseModel):
     item_name: str | None = Field(
         default=None,
         description="Full or partial item name.",
-        min_length=1,
-        max_length=100,
-    )
-    manufacturer: str | None = Field(
-        default=None,
-        description="Full or partial manufacturer name, for example Intel or AMD.",
         min_length=1,
         max_length=100,
     )
@@ -125,6 +121,44 @@ class SearchItemsArguments(BaseModel):
         min_length=1,
         max_length=100,
     )
+    gpu_manufacturer: GPUManufacturerType | None = Field(
+        default=None,
+        description=(
+            "Main manufacturer of the GPU, either NVIDIA or AMD."
+            "Required if specific model is searched."
+            "Nvidia relates to: Geforce, Quadro, Nvidia;"
+            "AMD relates to: Radeon"
+        ),
+        min_length=1,
+        max_length=100,
+    )
+    gpu_series: GPUSeriesType | None = Field(
+        default=None,
+        description=(
+            "Series of the GPU. Nvidia relates to: Geforce, Quadro, Nvidia;"
+            "AMD relates to: Radeon"
+        ),
+        min_length=1,
+        max_length=100,
+    )
+    gpu_model: str | None = Field(
+        default=None,
+        description=(
+            "Exact GPU model including a tier, like Ti or XD."
+            "Do not include manufacturer, brand or VRAM."
+            "Example of GPU model: RTX5070Ti, RX6800."
+        ),
+        min_length=1,
+        max_length=100,
+    )
+    gpu_vram: int | None = Field(
+        default=None,
+        description=(
+            "GPU VRAM in Gigabytes. If given Megabytes, convert it"
+        ),
+        ge=1,
+        le=100,
+    )
 
     @model_validator(mode="after")
     def validate_and_normalize_filters(self) -> "SearchItemsArguments":
@@ -166,11 +200,39 @@ class SearchItemsArguments(BaseModel):
                 raise ValueError(
                     "case_manufacturer and case_model can only be used with cases."
                 )
+        if any(
+            value is not None
+            for value in (
+                self.gpu_manufacturer,
+                self.gpu_series,
+                self.gpu_model,
+                self.gpu_vram,
+            )
+        ):
+            if self.category is None:
+                self.category = "GC"
+            elif self.category != "GC":
+                raise ValueError("GPU filters can only be used with graphics cards.")
+
+        if self.gpu_model is not None and self.gpu_manufacturer is None:
+            raise ValueError(
+                "gpu_manufacturer is required when gpu_model is provided"
+            )
+        if self.gpu_series is not None:
+            expected_manufacturer = (
+                "AMD" if self.gpu_series == "Radeon" else "NVIDIA"
+            )
+            if (
+                self.gpu_manufacturer is not None
+                and self.gpu_manufacturer != expected_manufacturer
+            ):
+                raise ValueError("gpu_series does not match gpu_manufacturer")
+            if self.gpu_manufacturer is None:
+                self.gpu_manufacturer = expected_manufacturer
         if not any(
             (
                 self.sku,
                 self.item_name,
-                self.manufacturer,
                 self.category,
                 self.ram_capacity,
                 self.ram_ddr,
@@ -182,6 +244,10 @@ class SearchItemsArguments(BaseModel):
                 self.hdd_type,
                 self.case_manufacturer,
                 self.case_model,
+                self.gpu_manufacturer,
+                self.gpu_model,
+                self.gpu_series,
+                self.gpu_vram,
             )
         ):
             raise ValueError("At least one item filter must be provided.")
@@ -245,7 +311,6 @@ def create_search_items_handler(item_service: ItemService):
     def search_items_handler(
         *,
         sku: str | None = None,
-        manufacturer: str | None = None,
         category: str | None = None,
         item_name: str | None = None,
         ram_capacity: int | None = None,
@@ -258,11 +323,14 @@ def create_search_items_handler(item_service: ItemService):
         hdd_type: Literal["HDD", "SSD"] | None = None,
         case_manufacturer: str | None = None,
         case_model: str | None = None,
+        gpu_manufacturer: Literal["NVIDIA", "AMD"] | None = None,
+        gpu_series: Literal["GeForce", "Radeon", "Quadro", "Nvidia"] | None = None,
+        gpu_model: str | None = None,
+        gpu_vram: int | None = None,
     ) -> dict[str, Any]:
         # Validate and normalize inputs using SearchItemsArguments
         args = SearchItemsArguments(
             sku=sku,
-            manufacturer=manufacturer,
             category=category,
             item_name=item_name,
             ram_capacity=ram_capacity,
@@ -275,12 +343,15 @@ def create_search_items_handler(item_service: ItemService):
             hdd_type=hdd_type,
             case_manufacturer=case_manufacturer,
             case_model=case_model,
+            gpu_manufacturer=gpu_manufacturer,
+            gpu_series=gpu_series,
+            gpu_model=gpu_model,
+            gpu_vram=gpu_vram,
         )
 
 
         result = item_service.search_items(
             sku=args.sku,
-            manufacturer=args.manufacturer,
             category=args.category,
             item_name=args.item_name,
             ram_capacity=args.ram_capacity,
@@ -293,11 +364,14 @@ def create_search_items_handler(item_service: ItemService):
             hdd_type=args.hdd_type,
             case_manufacturer=args.case_manufacturer,
             case_model=args.case_model,
+            gpu_manufacturer=args.gpu_manufacturer,
+            gpu_series=args.gpu_series,
+            gpu_model=args.gpu_model,
+            gpu_vram=args.gpu_vram,
         )
         return {
             "requested_filters": {
                 "sku": args.sku,
-                "manufacturer": args.manufacturer,
                 "category": args.category,
                 "item_name": args.item_name,
                 "ram_capacity": args.ram_capacity,
@@ -310,6 +384,10 @@ def create_search_items_handler(item_service: ItemService):
                 "hdd_type": args.hdd_type,
                 "case_manufacturer": args.case_manufacturer,
                 "case_model": args.case_model,
+                "gpu_manufacturer": args.gpu_manufacturer,
+                "gpu_series": args.gpu_series,
+                "gpu_model": args.gpu_model,
+                "gpu_vram": args.gpu_vram,
             },
             **asdict(result),
         }

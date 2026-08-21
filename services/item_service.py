@@ -16,7 +16,6 @@ class ItemService:
         self,
         *,
         sku: str | None = None,
-        manufacturer: str | None = None,
         category: str | None = None,
         item_name: str | None = None,
         ram_capacity: int | None = None,
@@ -29,11 +28,14 @@ class ItemService:
         hdd_type: Literal["HDD", "SSD"] | None = None,
         case_manufacturer: str | None = None,
         case_model: str | None = None,
+        gpu_manufacturer: Literal["NVIDIA", "AMD"] | None = None,
+        gpu_series: Literal["GeForce", "Radeon", "Quadro", "Nvidia"] | None = None,
+        gpu_model: str | None = None,
+        gpu_vram: int | None = None,
     ) -> ItemsSearchResponse:
         has_filter = any(
             [
                 sku,
-                manufacturer,
                 category,
                 item_name,
                 ram_capacity,
@@ -46,6 +48,10 @@ class ItemService:
                 hdd_type,
                 case_manufacturer,
                 case_model,
+                gpu_manufacturer,
+                gpu_series,
+                gpu_model,
+                gpu_vram,
             ]
         )
 
@@ -56,7 +62,6 @@ class ItemService:
 
         return self.repository.search_inventory(
             sku=sku,
-            manufacturer=manufacturer,
             category=category,
             item_name=item_name,
             ram_capacity=ram_capacity,
@@ -69,4 +74,8 @@ class ItemService:
             hdd_type=hdd_type,
             case_manufacturer=case_manufacturer,
             case_model=case_model,
+            gpu_manufacturer=gpu_manufacturer,
+            gpu_series=gpu_series,
+            gpu_model=gpu_model,
+            gpu_vram=gpu_vram,
         )

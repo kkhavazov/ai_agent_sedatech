@@ -187,3 +187,29 @@ def test_case_handler_forwards_normalized_filters() -> None:
     assert repository.filters["case_manufacturer"] == "CoolerMaster"
     assert repository.filters["case_model"] == "Elite 302"
     assert result["requested_filters"]["case_model"] == "Elite 302"
+
+
+def test_gpu_fields_infer_category_and_forward_filters() -> None:
+    repository = StubItemRepository()
+    handler = create_search_items_handler(ItemService(repository))
+
+    result = handler(
+        gpu_manufacturer="NVIDIA",
+        gpu_series="GeForce",
+        gpu_model="RTX5070Ti",
+        gpu_vram=16,
+    )
+
+    assert repository.filters["category"] == "GC"
+    assert repository.filters["gpu_model"] == "RTX5070Ti"
+    assert result["requested_filters"]["gpu_vram"] == 16
+
+
+def test_gpu_model_requires_manufacturer() -> None:
+    with pytest.raises(ValidationError):
+        SearchItemsArguments(gpu_model="RTX5070Ti")
+
+
+def test_gpu_series_rejects_wrong_manufacturer() -> None:
+    with pytest.raises(ValidationError):
+        SearchItemsArguments(gpu_manufacturer="AMD", gpu_series="GeForce")

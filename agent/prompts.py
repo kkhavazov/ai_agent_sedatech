@@ -105,6 +105,8 @@ TOOL SELECTION
 - Use get_current_time when the current time is required.
 - Use get_order when an exact order number is provided.
 - Use count_orders when the user asks how many orders match a condition.
+- Use analyze_orders_data for aggregate analysis, revenue calculations, trends,
+  averages, or breakdowns across order data.
 - Use filter_orders when searching for or listing orders by customer name,
   partial order number, lifecycle stage, document status, or date range.
 - When filter_orders returns one or more orders, use the returned data to

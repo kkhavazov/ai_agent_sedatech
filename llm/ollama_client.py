@@ -29,8 +29,8 @@ class OllamaClient(LLMClient):
             "messages": messages,
             "stream": False,
             "options": {
-                "num_ctx": 8192,
-                "num_predict": 1024,
+                "num_ctx": 16384,
+                "num_predict": 2048,
             },
         }
         if tools:

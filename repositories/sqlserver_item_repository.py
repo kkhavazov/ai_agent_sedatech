@@ -235,7 +235,6 @@ class SqlServerItemRepository(ItemRepository):
         self,
         *,
         sku: str | None = None,
-        manufacturer: str | None = None,
         category: str | None = None,
         item_name: str | None = None,
         ram_capacity: int | None = None,
@@ -248,13 +247,16 @@ class SqlServerItemRepository(ItemRepository):
         hdd_type: Literal["HDD", "SSD"] | None = None,
         case_manufacturer: str | None = None,
         case_model: str | None = None,
+        gpu_manufacturer: Literal["NVIDIA", "AMD"] | None = None,
+        gpu_series: Literal["Geforce", "Radeon", "Quadro", "Nvidia"] | None = None,
+        gpu_model: str | None = None,
+        gpu_vram: int | None = None,
     ) -> ItemsSearchResponse:
         filters: list[str] = []
         parameters: list[Any] = []
 
         for value, column in (
             (sku, "SERIE.Artikelnummer"),
-            (manufacturer, "ART._HERSTELLER"),
             (category, "ART.ArtikelGruppe"),
             (item_name, "ART.Bezeichnung"),
         ):
@@ -334,6 +336,30 @@ class SqlServerItemRepository(ItemRepository):
             else:
                 filters.append("ART.Bezeichnung LIKE %s")
                 parameters.append(f"{case_manufacturer} %")
+        if category == "GC":
+            if gpu_manufacturer:
+                if gpu_manufacturer == "AMD":
+                    filters.append("ART.Bezeichnung LIKE %s")
+                    parameters.append("Radeon %")
+                else:
+                    filters.append(
+                        "(ART.Bezeichnung LIKE %s OR ART.Bezeichnung LIKE %s "
+                        "OR ART.Bezeichnung LIKE %s)"
+                    )
+                    parameters.extend(("Geforce %", "Quadro %", "Nvidia %"))
+            if gpu_model:
+                filters.append("ART.Bezeichnung LIKE %s")
+                parameters.append(f"%{gpu_model}%")
+            if gpu_vram:
+                if gpu_vram > 2:
+                    filters.append("ART.Bezeichnung LIKE %s")
+                    parameters.append(f"%{gpu_vram}GB%")
+                elif gpu_vram == 1:
+                    filters.append("ART.Bezeichnung LIKE %s")
+                    parameters.append(f"%1024MB%")
+                else:
+                    filters.append("ART.Bezeichnung LIKE %s")
+                    parameters.append("%2048MB%")
         where_sql = "WHERE " + " AND ".join(
             [
                 "SERIE.SCTyp <> 'O'",

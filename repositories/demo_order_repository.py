@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import date
+
 from models.order import Order, OrderItem
 from repositories.order_repository import OrderRepository
 
@@ -77,3 +79,35 @@ class DemoOrderRepository(OrderRepository):
         # Add date filtering when Order contains an order_date field.
 
         return orders[: max(1, min(limit, 100))]
+
+    def analyze_orders_data(
+        self,
+        *,
+        date_from: date | None = None,
+        date_to: date | None = None,
+        document_type: str | None = None,
+        status: int | None = None,
+        max_rows: int = 1000,
+    ):
+        import pandas as pd
+
+        rows = [
+            {
+                "CreatedAt": None,
+                "CustomerNumber": None,
+                "Status": order.status,
+                "Platform": "Demo",
+                "FinalPrice": sum(
+                    (item.price or 0) * item.quantity for item in order.items
+                ),
+                "FirstPrice": None,
+                "Taxes": None,
+                "Country": None,
+                "Postcode": None,
+                "City": None,
+            }
+            for order in self._orders.values()
+            if (document_type is None or order.document_type == document_type)
+            and (status is None or order.status == status)
+        ]
+        return pd.DataFrame.from_records(rows[:max_rows])

@@ -447,3 +447,86 @@ class SqlServerOrderRepository:
                 items.append(item)
 
         return items
+
+    def analyze_orders_data(
+        self,
+        *,
+        date_from: date | None = None,
+        date_to: date | None = None,
+        document_type: str | None = None,
+        status: int | None = None,
+        max_rows: int = 1000,
+    ):
+        import pandas as pd
+
+        safe_max_rows = max(1, min(max_rows, 5000))
+        conditions: list[str] = [
+            "t1.Adressnummer NOT IN ('K10000', 'DE00000', 'K000000')",
+            "t1.Vorlage = ''",
+        ]
+        parameters: list[Any] = []
+
+        if document_type is not None:
+            conditions.append("t1.Belegtyp = %s")
+            parameters.append(document_type)
+
+        if status is not None:
+            conditions.append("t1.Status = %s")
+            parameters.append(status)
+
+        if date_from is not None:
+            conditions.append("t1.AngelegtAm >= %s")
+            parameters.append(date_from)
+
+        if date_to is not None and date_to < date.max:
+            conditions.append(
+                "t1.AngelegtAm < DATEADD(day, 1, %s)"
+            )
+            parameters.append(date_to)
+
+        where_clause = "WHERE " + " AND ".join(conditions)
+
+        query = f"""
+            SELECT TOP ({safe_max_rows})
+                t1.AngelegtAm AS CreatedAt,
+                t1.Adressnummer AS CustomerNumber,
+                t1.Status AS Status,
+                t2.Name AS Platform,
+                t1.Netto AS FinalPrice,
+                t1.Brutto AS FirstPrice,
+                t1.Steuer AS Taxes,
+                t1.Land AS Country,
+                t1.Plz AS Postcode,
+                t1.Ort AS City
+            FROM dbo.BELEG as t1
+            INNER JOIN dbo.MITARBW AS t2 ON t1.Vertreter = t2.Nr
+            {where_clause}
+        """
+
+        connection = None
+        cursor = None
+
+        try:
+            connection = self._connect()
+            cursor = connection.cursor()
+            cursor.execute(query, tuple(parameters))
+
+            rows = cursor.fetchall() or []
+            columns = [
+                "CreatedAt", "CustomerNumber", "Status", "Platform",
+                "FinalPrice", "FirstPrice", "Taxes", "Country",
+                "Postcode", "City",
+            ]
+            return pd.DataFrame.from_records(rows, columns=columns)
+
+        except pymssql.Error as exc:
+            raise RuntimeError(
+                f"SQL Server count query failed: {exc}"
+            ) from exc
+
+        finally:
+            if cursor is not None:
+                cursor.close()
+
+            if connection is not None:
+                connection.close()

@@ -23,6 +23,10 @@ from tools.missing_component_tools import (
     build_find_missing_components_tool,
     build_find_open_order_missing_components_tool,
 )
+from tools.orders.analyze_orders import (
+    AnalyzeOrdersDataArguments,
+    create_analyze_orders_data_handler,
+)
 
 
 def build_tool_registry(
@@ -54,6 +58,19 @@ def build_tool_registry(
             ),
             arguments_model=FilterOrdersArguments,
             handler=create_filter_orders_handler(order_service),
+        )
+    )
+    registry.register(
+        ToolDefinition(
+            name="analyze_orders_data",
+            description=(
+                "Return row-level order data for analysis, grouping, trends, "
+                "revenue calculations, and breakdowns by platform, country, "
+                "status, or date. Prefer count_orders for a simple count and "
+                "filter_orders when order identities or details are requested."
+            ),
+            arguments_model=AnalyzeOrdersDataArguments,
+            handler=create_analyze_orders_data_handler(order_service),
         )
     )
     registry.register(
