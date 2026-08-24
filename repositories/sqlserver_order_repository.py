@@ -490,6 +490,7 @@ class SqlServerOrderRepository:
             SELECT TOP ({safe_max_rows})
                 t1.AngelegtAm AS CreatedAt,
                 t1.Adressnummer AS CustomerNumber,
+                t1.Belegtyp AS DocumentType,
                 t1.Status AS Status,
                 t2.Name AS Platform,
                 t1.Netto AS FinalPrice,
@@ -513,15 +514,15 @@ class SqlServerOrderRepository:
 
             rows = cursor.fetchall() or []
             columns = [
-                "CreatedAt", "CustomerNumber", "Status", "Platform",
-                "FinalPrice", "FirstPrice", "Taxes", "Country",
-                "Postcode", "City",
+                "CreatedAt", "CustomerNumber", "DocumentType", "Status",
+                "Platform", "FinalPrice", "FirstPrice", "Taxes",
+                "Country", "Postcode", "City",
             ]
             return pd.DataFrame.from_records(rows, columns=columns)
 
         except pymssql.Error as exc:
             raise RuntimeError(
-                f"SQL Server count query failed: {exc}"
+                f"SQL Server order analysis query failed: {exc}"
             ) from exc
 
         finally:

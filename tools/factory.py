@@ -66,7 +66,11 @@ def build_tool_registry(
             description=(
                 "Return row-level order data for analysis, grouping, trends, "
                 "revenue calculations, and breakdowns by platform, country, "
-                "status, or date. Prefer count_orders for a simple count and "
+                "status, or date. Use lifecycle_state for current operational "
+                "stages: created_unconfirmed=A/0, confirmed_workshop=D/0, "
+                "in_production=L/0, ready_or_sent=R/0. For historical stage "
+                "activity use document_type without status; completed A, D, or L "
+                "stages use status=2. Prefer count_orders for a simple count and "
                 "filter_orders when order identities or details are requested."
             ),
             arguments_model=AnalyzeOrdersDataArguments,

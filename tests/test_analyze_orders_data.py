@@ -52,3 +52,13 @@ def test_analyze_tool_is_registered() -> None:
     tool_names = [schema["function"]["name"] for schema in registry.schemas()]
 
     assert "analyze_orders_data" in tool_names
+
+
+def test_analyze_handler_resolves_lifecycle_state() -> None:
+    repository = AnalyzeRepository()
+    handler = create_analyze_orders_data_handler(OrderService(repository))
+
+    handler(lifecycle_state="in_production")
+
+    assert repository.arguments["document_type"] == "L"
+    assert repository.arguments["status"] == 0

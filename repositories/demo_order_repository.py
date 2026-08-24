@@ -95,6 +95,7 @@ class DemoOrderRepository(OrderRepository):
             {
                 "CreatedAt": None,
                 "CustomerNumber": None,
+                "DocumentType": order.document_type,
                 "Status": order.status,
                 "Platform": "Demo",
                 "FinalPrice": sum(

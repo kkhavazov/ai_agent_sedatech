@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import date
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -161,5 +161,4 @@ class OrderFiltersArguments(BaseModel):
             )
 
         return self
-
 

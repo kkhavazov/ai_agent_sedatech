@@ -5,3 +5,4 @@ google-genai>=1.0,<2
 pymssql>=2.3,<3
 pytest>=8.3,<9
 pandas>=2.2,<3
+tabulate>=0.9,<1
