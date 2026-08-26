@@ -1,47 +1,77 @@
 from __future__ import annotations
 
+import calendar
+import re
 from datetime import date, datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, ValidationInfo, field_validator, model_validator
 
 from services.order_service import OrderService
-from tools.orders.orders_filter_args import LIFECYCLE_FILTERS, LifecycleState
+Metric = Literal["revenue", "order_count", "average_production_time"]
+GroupBy = Literal["year", "month", "platform", "country", "city", "postcode"]
 
 
-class AnalyzeOrdersDataArguments(BaseModel):
-    lifecycle_state: LifecycleState | None = Field(
-        default=None,
-        description=(
-            "Current operational lifecycle state. created_unconfirmed = A/0; "
-            "confirmed_workshop = D/0; in_production = L/0; "
-            "ready_or_sent = R/0. Use this for current-state questions."
-        ),
+class AnalyzeDataArguments(BaseModel):
+    metrics: list[Metric] = Field(
+        default_factory=lambda: [
+            "revenue", "order_count", "average_production_time"
+        ], min_length=1
     )
+    group_by: list[GroupBy] = Field(
+        default_factory=lambda: ["year", "month"]
+    )
+    filters: dict[str, str | int | float | bool] = Field(default_factory=dict)
     date_from: date | None = None
     date_to: date | None = None
-    document_type: Literal["A", "D", "L", "R"] | None = None
+    document_type: Literal["A", "D", "L", "R"] | None = "R"
     status: int | None = Field(default=None, ge=0)
-    max_rows: int = Field(default=1000, ge=1, le=5000)
+    sort_by: str | None = None
+    sort_direction: Literal["asc", "desc"] = "asc"
+    limit: int | None = Field(default=None, ge=1, le=10000)
+
+    @field_validator("date_from", "date_to", mode="before")
+    @classmethod
+    def expand_month_date(cls, value: Any, info: ValidationInfo) -> Any:
+        if isinstance(value, str) and not value.strip():
+            return None
+        if (
+            info.field_name == "date_to"
+            and isinstance(value, str)
+            and value.strip().casefold() in {"today", "now", "current date"}
+        ):
+            return None
+        if not isinstance(value, str) or not re.fullmatch(r"\d{4}-\d{2}", value):
+            return value
+        year, month = (int(part) for part in value.split("-"))
+        if not 1 <= month <= 12:
+            raise ValueError("month must be between 01 and 12")
+        day = 1
+        if info.field_name == "date_to":
+            day = calendar.monthrange(year, month)[1]
+        return date(year, month, day)
+
+    @model_validator(mode="before")
+    @classmethod
+    def promote_date_filters(cls, values: Any) -> Any:
+        if not isinstance(values, dict) or not isinstance(values.get("filters"), dict):
+            return values
+        values = dict(values)
+        filters = dict(values["filters"])
+        for field_name in ("date_from", "date_to"):
+            filter_value = filters.pop(field_name, None)
+            if values.get(field_name) in (None, "") and filter_value not in (None, ""):
+                values[field_name] = filter_value
+        values["filters"] = filters
+        return values
 
     @model_validator(mode="after")
-    def validate_dates(self) -> "AnalyzeOrdersDataArguments":
+    def validate_dates(self) -> "AnalyzeDataArguments":
         if self.date_from and self.date_to and self.date_from > self.date_to:
             raise ValueError("date_from cannot be later than date_to")
-        if self.lifecycle_state is not None:
-            expected_type, expected_status = LIFECYCLE_FILTERS[
-                self.lifecycle_state
-            ]
-            if self.document_type not in (None, expected_type):
-                raise ValueError(
-                    f"lifecycle_state={self.lifecycle_state!r} requires "
-                    f"document_type={expected_type!r}"
-                )
-            if self.status not in (None, int(expected_status)):
-                raise ValueError(
-                    f"lifecycle_state={self.lifecycle_state!r} requires "
-                    f"status={expected_status}"
-                )
+        allowed_sort_fields = set(self.group_by) | set(self.metrics)
+        if self.sort_by is not None and self.sort_by not in allowed_sort_fields:
+            raise ValueError("sort_by must be one of the requested metrics or groups")
         return self
 
 
@@ -61,26 +91,33 @@ def _json_safe(value: Any) -> Any:
     return value
 
 
-def create_analyze_orders_data_handler(order_service: OrderService):
-    def analyze_orders_data_handler(
-        lifecycle_state: LifecycleState | None = None,
+def create_analyze_data_handler(order_service: OrderService):
+    def analyze_data_handler(
+        metrics: list[Metric],
+        group_by: list[GroupBy] | None = None,
+        filters: dict[str, str | int | float | bool] | None = None,
         date_from: date | None = None,
         date_to: date | None = None,
-        document_type: Literal["A", "D", "L", "R"] | None = None,
+        document_type: Literal["A", "D", "L", "R"] | None = "R",
         status: int | None = None,
-        max_rows: int = 1000,
+        sort_by: str | None = None,
+        sort_direction: Literal["asc", "desc"] = "asc",
+        limit: int | None = None,
     ) -> dict[str, Any]:
-        if lifecycle_state is not None:
-            document_type, resolved_status = LIFECYCLE_FILTERS[
-                lifecycle_state
-            ]
-            status = int(resolved_status)
-        frame = order_service.analyze_orders_data(
+        group_by = list(group_by or [])
+        if "month" in group_by and "year" not in group_by:
+            group_by.insert(0, "year")
+        frame = order_service.analyze_data(
+            metrics=metrics,
+            group_by=group_by,
+            filters=filters or {},
             date_from=date_from,
             date_to=date_to,
             document_type=document_type,
             status=status,
-            max_rows=max_rows,
+            sort_by=sort_by,
+            sort_direction=sort_direction,
+            limit=limit,
         )
         records = [
             {key: _json_safe(value) for key, value in record.items()}
@@ -88,9 +125,12 @@ def create_analyze_orders_data_handler(order_service: OrderService):
         ]
         return {
             "row_count": len(records),
-            "max_rows": max_rows,
-            "possibly_truncated": len(records) == max_rows,
             "rows": records,
         }
 
-    return analyze_orders_data_handler
+    return analyze_data_handler
+
+
+# Compatibility aliases for integrations importing the former Python symbols.
+AnalyzeOrdersDataArguments = AnalyzeDataArguments
+create_analyze_orders_data_handler = create_analyze_data_handler

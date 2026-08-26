@@ -35,7 +35,7 @@ class OrderRepository(ABC):
         date_to: date | None = None,
         document_type: str | None = None,
         status: int | None = None,
-        max_rows: int = 1000,
+        max_rows: int = 10000,
     ) -> Any:
         """Return tabular order data for aggregate analysis."""
         raise NotImplementedError

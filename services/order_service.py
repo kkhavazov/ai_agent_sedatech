@@ -111,21 +111,74 @@ class OrderService:
             date_to=date_to,
         )
 
-    def analyze_orders_data(
+    def analyze_data(
         self,
         *,
+        metrics: list[str],
+        group_by: list[str],
+        filters: dict[str, str | int | float | bool],
         date_from: date | None = None,
         date_to: date | None = None,
         document_type: str | None = None,
         status: int | None = None,
-        max_rows: int = 1000,
+        sort_by: str | None = None,
+        sort_direction: Literal["asc", "desc"] = "asc",
+        limit: int | None = None,
     ) -> Any:
         if date_from and date_to and date_from > date_to:
             raise ValueError("date_from cannot be later than date_to")
-        return self.repository.analyze_orders_data(
+        frame = self.repository.analyze_orders_data(
             date_from=date_from,
             date_to=date_to,
             document_type=document_type,
             status=status,
-            max_rows=max(1, min(max_rows, 5000)),
+            max_rows=10000,
         )
+        import pandas as pd
+
+        columns = {
+            "platform": "Platform", "country": "Country", "city": "City",
+            "postcode": "Postcode", "customer_number": "CustomerNumber",
+            "document_type": "DocumentType", "status": "Status",
+        }
+        for key, value in filters.items():
+            column = columns.get(key)
+            if column is None:
+                raise ValueError(f"Unsupported filter: {key}")
+            frame = frame[frame[column] == value]
+
+        dates = pd.to_datetime(frame["CreatedAt"], errors="coerce")
+        if "year" in group_by:
+            frame = frame.assign(year=dates.dt.year)
+        if "month" in group_by:
+            frame = frame.assign(month=dates.dt.month)
+        rename_groups = {key: columns[key] for key in group_by if key in columns}
+        frame = frame.rename(columns={value: key for key, value in rename_groups.items()})
+
+        aggregations: dict[str, tuple[str, str]] = {}
+        if "revenue" in metrics:
+            aggregations["revenue"] = ("FinalPrice", "sum")
+        if "order_count" in metrics:
+            aggregations["order_count"] = ("CreatedAt", "size")
+        if "average_production_time" in metrics:
+            if "ProductionTime" not in frame.columns:
+                raise ValueError("average_production_time is not available in the order data source")
+            aggregations["average_production_time"] = ("ProductionTime", "mean")
+
+        if group_by:
+            result = frame.groupby(group_by, dropna=False).agg(**aggregations).reset_index()
+        else:
+            values = {}
+            for name, (column, operation) in aggregations.items():
+                attribute = getattr(frame[column], operation)
+                values[name] = attribute() if callable(attribute) else attribute
+            result = pd.DataFrame([values])
+        if sort_by:
+            result = result.sort_values(sort_by, ascending=sort_direction == "asc")
+        if limit is not None:
+            result = result.head(limit)
+        return result
+
+    def analyze_orders_data(self, **arguments) -> Any:
+        """Backward-compatible raw-data API."""
+        return self.repository.analyze_orders_data(**arguments)

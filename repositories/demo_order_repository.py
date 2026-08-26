@@ -87,7 +87,7 @@ class DemoOrderRepository(OrderRepository):
         date_to: date | None = None,
         document_type: str | None = None,
         status: int | None = None,
-        max_rows: int = 1000,
+        max_rows: int = 10000,
     ):
         import pandas as pd
 
@@ -106,6 +106,7 @@ class DemoOrderRepository(OrderRepository):
                 "Country": None,
                 "Postcode": None,
                 "City": None,
+                "ProductionTime": None,
             }
             for order in self._orders.values()
             if (document_type is None or order.document_type == document_type)

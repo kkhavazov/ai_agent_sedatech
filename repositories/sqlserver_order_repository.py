@@ -455,11 +455,11 @@ class SqlServerOrderRepository:
         date_to: date | None = None,
         document_type: str | None = None,
         status: int | None = None,
-        max_rows: int = 1000,
+        max_rows: int = 10000,
     ):
         import pandas as pd
 
-        safe_max_rows = max(1, min(max_rows, 5000))
+        safe_max_rows = max(1, min(max_rows, 10000))
         conditions: list[str] = [
             "t1.Adressnummer NOT IN ('K10000', 'DE00000', 'K000000')",
             "t1.Vorlage = ''",
@@ -498,7 +498,8 @@ class SqlServerOrderRepository:
                 t1.Steuer AS Taxes,
                 t1.Land AS Country,
                 t1.Plz AS Postcode,
-                t1.Ort AS City
+                t1.Ort AS City,
+                DATEDIFF(hour, t1.AngelegtAm, t1.BearbeitetAm) AS DateDiff
             FROM dbo.BELEG as t1
             INNER JOIN dbo.MITARBW AS t2 ON t1.Vertreter = t2.Nr
             {where_clause}
@@ -517,6 +518,7 @@ class SqlServerOrderRepository:
                 "CreatedAt", "CustomerNumber", "DocumentType", "Status",
                 "Platform", "FinalPrice", "FirstPrice", "Taxes",
                 "Country", "Postcode", "City",
+                "ProductionTime",
             ]
             return pd.DataFrame.from_records(rows, columns=columns)
 
