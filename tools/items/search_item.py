@@ -389,7 +389,7 @@ def create_search_items_handler(item_service: ItemService):
                 "gpu_model": args.gpu_model,
                 "gpu_vram": args.gpu_vram,
             },
-            **asdict(result),
+            "items": [asdict(item) for item in result],
         }
 
     return search_items_handler

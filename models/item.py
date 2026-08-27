@@ -13,6 +13,7 @@ class MissingComponent:
 
 @dataclass(slots=True)
 class ItemsSearchResponse:
+    name: str
     amount: int
     ordered: int
     minimum_price: float

@@ -32,7 +32,7 @@ class ItemService:
         gpu_series: Literal["GeForce", "Radeon", "Quadro", "Nvidia"] | None = None,
         gpu_model: str | None = None,
         gpu_vram: int | None = None,
-    ) -> ItemsSearchResponse:
+    ) -> list[ItemsSearchResponse]:
         has_filter = any(
             [
                 sku,

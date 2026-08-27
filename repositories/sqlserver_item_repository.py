@@ -251,7 +251,7 @@ class SqlServerItemRepository(ItemRepository):
         gpu_series: Literal["Geforce", "Radeon", "Quadro", "Nvidia"] | None = None,
         gpu_model: str | None = None,
         gpu_vram: int | None = None,
-    ) -> ItemsSearchResponse:
+    ) -> list[ItemsSearchResponse]:
         filters: list[str] = []
         parameters: list[Any] = []
 
@@ -382,22 +382,47 @@ class SqlServerItemRepository(ItemRepository):
                 + ")",
             ]
         )
-        from_sql = """
-            FROM dbo.LAGERP
-            INNER JOIN SERIE ON SERIE.Id = LAGERP.IdSerie
-            INNER JOIN ART ON ART.Artikelnummer = SERIE.Artikelnummer
-        """
-        count_query = f"""
-            SELECT COALESCE(SUM(LAGERP.Bestand), 0) AS ItemCount, MIN(LAGERP.Wert) AS MinimumPrice, MAX(LAGERP.Wert) AS MaximumPrice, AVG(LAGERP.Wert) AS AveragePrice
-            {from_sql}
-            {where_sql}
-        """
-        sum_sql = f"""
-            SELECT COALESCE(SUM(BELEGP.Menge), 0) AS OrderedAmount
-            FROM BELEG
-            INNER JOIN BELEGP ON BELEGP.Belegnummer = BELEG.Belegnummer
-            INNER JOIN ART ON ART.Artikelnummer = BELEGP.Artikelnummer
-            {where_sql_sum}
+        query = f"""
+            SELECT
+                Stock.Bezeichnung,
+                Stock.ItemCount,
+                Stock.MinimumPrice,
+                Stock.MaximumPrice,
+                Stock.AveragePrice,
+                Orders.OrderedAmount
+            FROM
+            (
+                SELECT
+                    ART.Bezeichnung,
+                    COALESCE(SUM(LAGERP.Bestand), 0) AS ItemCount,
+                    MIN(LAGERP.Wert) AS MinimumPrice,
+                    MAX(LAGERP.Wert) AS MaximumPrice,
+                    AVG(LAGERP.Wert) AS AveragePrice
+                FROM dbo.LAGERP
+                INNER JOIN SERIE
+                    ON SERIE.Id = LAGERP.IdSerie
+                INNER JOIN ART
+                    ON ART.Artikelnummer = SERIE.Artikelnummer
+                {where_sql}
+                        GROUP BY ART.Bezeichnung
+            ) AS Stock
+
+            LEFT JOIN
+            (
+                SELECT
+                ART.Bezeichnung,
+                    COALESCE(SUM(BELEGP.Menge), 0) AS OrderedAmount
+                FROM dbo.BELEG
+                    INNER JOIN dbo.BELEGP
+                        ON BELEGP.Belegnummer = BELEG.Belegnummer
+                    INNER JOIN dbo.ART
+                        ON ART.Artikelnummer = BELEGP.Artikelnummer
+                {where_sql_sum}
+                        GROUP BY ART.Bezeichnung
+            ) AS Orders
+                ON Orders.Bezeichnung = Stock.Bezeichnung
+
+                ORDER BY Stock.Bezeichnung
         """
 
         connection = None
@@ -405,10 +430,9 @@ class SqlServerItemRepository(ItemRepository):
         try:
             connection = self._connect()
             cursor = connection.cursor()
-            cursor.execute(count_query, tuple(parameters))
-            count_row = cursor.fetchone()
-            cursor.execute(sum_sql, tuple(parameters))
-            sum_row = cursor.fetchone()
+            # The same article filters occur in both grouped subqueries.
+            cursor.execute(query, tuple(parameters + parameters))
+            main_row = cursor.fetchall()
         except pymssql.Error as exc:
             logger.exception("Inventory search failed")
             raise RuntimeError(
@@ -420,12 +444,18 @@ class SqlServerItemRepository(ItemRepository):
             if connection is not None:
                 connection.close()
 
-        total_amount = int(count_row["ItemCount"]) if count_row else 0
-        ordered_amount = int(sum_row["OrderedAmount"]) if sum_row else 0
-        return ItemsSearchResponse(
-            amount=total_amount,
-            ordered=ordered_amount,
-            minimum_price=float(count_row["MinimumPrice"] or 0) if count_row else 0.0,
-            maximum_price=float(count_row["MaximumPrice"] or 0) if count_row else 0.0,
-            average_price=float(count_row["AveragePrice"] or 0) if count_row else 0.0,
-        )
+        
+        result: list[ItemsSearchResponse] = []
+        for item in main_row:
+            total_amount = int(item["ItemCount"] or 0)
+            ordered_amount = int(item["OrderedAmount"] or 0)
+
+            result.append(ItemsSearchResponse(
+                name=str(item["Bezeichnung"]),
+                amount=total_amount,
+                ordered=ordered_amount,
+                minimum_price=float(item["MinimumPrice"] or 0),
+                maximum_price=float(item["MaximumPrice"] or 0),
+                average_price=float(item["AveragePrice"] or 0),
+            ))
+        return result

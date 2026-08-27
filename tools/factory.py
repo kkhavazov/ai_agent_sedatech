@@ -99,7 +99,9 @@ def build_tool_registry(
             ToolDefinition(
                 name="search_item",
                 description=(
-                    "Return the number of inventory items matching the filters."
+                    "Return each available article matching the filters, grouped "
+                    "by article name, with its inventory amount, ordered amount, "
+                    "and price statistics."
                 ),
                 arguments_model=SearchItemsArguments,
                 handler=create_search_items_handler(item_service),

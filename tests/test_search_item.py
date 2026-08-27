@@ -14,20 +14,27 @@ class StubItemRepository:
     def __init__(self) -> None:
         self.filters = {}
 
-    def search_inventory(self, **filters) -> ItemsSearchResponse:
+    def search_inventory(self, **filters) -> list[ItemsSearchResponse]:
         self.filters = filters
-        return ItemsSearchResponse(7, 3, 10.0, 20.0, 15.0)
+        return [ItemsSearchResponse("32GB Demo RAM", 7, 3, 10.0, 20.0, 15.0)]
 
 
-def test_search_item_handler_returns_amount() -> None:
+def test_search_item_handler_returns_named_articles() -> None:
     repository = StubItemRepository()
     handler = create_search_items_handler(ItemService(repository))
 
     result = handler(category="ME", ram_capacity=32)
 
-    assert result["amount"] == 7
-    assert result["ordered"] == 3
-    assert result["minimum_price"] == 10.0
+    assert result["items"] == [
+        {
+            "name": "32GB Demo RAM",
+            "amount": 7,
+            "ordered": 3,
+            "minimum_price": 10.0,
+            "maximum_price": 20.0,
+            "average_price": 15.0,
+        }
+    ]
     assert result["requested_filters"]["ram_capacity"] == 32
     assert repository.filters["ram_capacity"] == 32
 
@@ -139,7 +146,7 @@ def test_demo_repository_accepts_cpu_filters() -> None:
         cpu_model="9900X",
     )
 
-    assert result["amount"] == 0
+    assert result["items"] == []
 
 
 def test_case_fields_infer_category_and_normalize_inventory_names() -> None:

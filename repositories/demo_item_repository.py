@@ -36,7 +36,7 @@ class DemoItemRepository(ItemRepository):
         gpu_series: Literal["GeForce", "Radeon", "Quadro", "Nvidia"] | None = None,
         gpu_model: str | None = None,
         gpu_vram: int | None = None,
-    ) -> ItemsSearchResponse:
+    ) -> list[ItemsSearchResponse]:
         items = self._items
         if sku:
             items = [item for item in items if sku.casefold() in item.sku.casefold()]
@@ -78,10 +78,14 @@ class DemoItemRepository(ItemRepository):
             speed_marker = str(ram_speed)
             items = [item for item in items if speed_marker in item.name]
         prices = [item.price for item in items if item.price is not None]
-        return ItemsSearchResponse(
-            amount=sum(item.quantity for item in items),
-            ordered=0,
-            minimum_price=min(prices, default=0.0),
-            maximum_price=max(prices, default=0.0),
-            average_price=sum(prices) / len(prices) if prices else 0.0,
-        )
+        return [
+            ItemsSearchResponse(
+                name=item.name,
+                amount=item.quantity,
+                ordered=0,
+                minimum_price=float(item.price or 0),
+                maximum_price=float(item.price or 0),
+                average_price=float(item.price or 0),
+            )
+            for item in items
+        ]
