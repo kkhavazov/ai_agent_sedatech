@@ -384,6 +384,7 @@ class SqlServerItemRepository(ItemRepository):
         )
         query = f"""
             SELECT
+                Stock.Artikelnummer,
                 Stock.Bezeichnung,
                 Stock.ItemCount,
                 Stock.MinimumPrice,
@@ -393,7 +394,7 @@ class SqlServerItemRepository(ItemRepository):
             FROM
             (
                 SELECT
-                    ART.Bezeichnung,
+                    ART.Bezeichnung, ART.Artikelnummer,
                     COALESCE(SUM(LAGERP.Bestand), 0) AS ItemCount,
                     MIN(LAGERP.Wert) AS MinimumPrice,
                     MAX(LAGERP.Wert) AS MaximumPrice,
@@ -404,13 +405,13 @@ class SqlServerItemRepository(ItemRepository):
                 INNER JOIN ART
                     ON ART.Artikelnummer = SERIE.Artikelnummer
                 {where_sql}
-                        GROUP BY ART.Bezeichnung
+                        GROUP BY ART.Bezeichnung, ART.Artikelnummer
             ) AS Stock
 
             LEFT JOIN
             (
                 SELECT
-                ART.Bezeichnung,
+                ART.Bezeichnung, ART.Artikelnummer,
                     COALESCE(SUM(BELEGP.Menge), 0) AS OrderedAmount
                 FROM dbo.BELEG
                     INNER JOIN dbo.BELEGP
@@ -418,9 +419,10 @@ class SqlServerItemRepository(ItemRepository):
                     INNER JOIN dbo.ART
                         ON ART.Artikelnummer = BELEGP.Artikelnummer
                 {where_sql_sum}
-                        GROUP BY ART.Bezeichnung
+                        GROUP BY ART.Bezeichnung, ART.Artikelnummer
             ) AS Orders
-                ON Orders.Bezeichnung = Stock.Bezeichnung
+                ON Orders.Artikelnummer = Stock.Artikelnummer
+                AND Orders.Bezeichnung = Stock.Bezeichnung
 
                 ORDER BY Stock.Bezeichnung
         """
@@ -451,6 +453,7 @@ class SqlServerItemRepository(ItemRepository):
             ordered_amount = int(item["OrderedAmount"] or 0)
 
             result.append(ItemsSearchResponse(
+                sku=str(item["Artikelnummer"]),
                 name=str(item["Bezeichnung"]),
                 amount=total_amount,
                 ordered=ordered_amount,

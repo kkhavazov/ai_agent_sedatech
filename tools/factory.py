@@ -100,8 +100,8 @@ def build_tool_registry(
                 name="search_item",
                 description=(
                     "Return each available article matching the filters, grouped "
-                    "by article name, with its inventory amount, ordered amount, "
-                    "and price statistics."
+                    "by article number and name, with its SKU, inventory amount, "
+                    "ordered amount, and price statistics."
                 ),
                 arguments_model=SearchItemsArguments,
                 handler=create_search_items_handler(item_service),

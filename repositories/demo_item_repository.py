@@ -80,6 +80,7 @@ class DemoItemRepository(ItemRepository):
         prices = [item.price for item in items if item.price is not None]
         return [
             ItemsSearchResponse(
+                sku=item.sku,
                 name=item.name,
                 amount=item.quantity,
                 ordered=0,

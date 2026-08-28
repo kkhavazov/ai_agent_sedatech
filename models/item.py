@@ -13,6 +13,7 @@ class MissingComponent:
 
 @dataclass(slots=True)
 class ItemsSearchResponse:
+    sku: str
     name: str
     amount: int
     ordered: int

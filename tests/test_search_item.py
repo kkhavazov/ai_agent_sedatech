@@ -16,7 +16,17 @@ class StubItemRepository:
 
     def search_inventory(self, **filters) -> list[ItemsSearchResponse]:
         self.filters = filters
-        return [ItemsSearchResponse("32GB Demo RAM", 7, 3, 10.0, 20.0, 15.0)]
+        return [
+            ItemsSearchResponse(
+                sku="ME00001",
+                name="32GB Demo RAM",
+                amount=7,
+                ordered=3,
+                minimum_price=10.0,
+                maximum_price=20.0,
+                average_price=15.0,
+            )
+        ]
 
 
 def test_search_item_handler_returns_named_articles() -> None:
@@ -27,6 +37,7 @@ def test_search_item_handler_returns_named_articles() -> None:
 
     assert result["items"] == [
         {
+            "sku": "ME00001",
             "name": "32GB Demo RAM",
             "amount": 7,
             "ordered": 3,

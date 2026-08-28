@@ -15,6 +15,7 @@ class FakeCursor:
     def fetchall(self):
         return [
             {
+                "Artikelnummer": "CP00001",
                 "Bezeichnung": "AMD Ryzen 9 9900X",
                 "ItemCount": 12,
                 "OrderedAmount": 4,
@@ -57,6 +58,7 @@ def test_amd_cpu_search_uses_cpu_manufacturer_and_prefix_match() -> None:
     )
 
     assert len(result) == 1
+    assert result[0].sku == "CP00001"
     assert result[0].name == "AMD Ryzen 9 9900X"
     assert result[0].amount == 12
     assert result[0].ordered == 4
@@ -67,6 +69,7 @@ def test_amd_cpu_search_uses_cpu_manufacturer_and_prefix_match() -> None:
     )
     assert "SUM(LAGERP.Bestand)" in cursor.executions[0][0]
     assert "SUM(BELEGP.Menge)" in cursor.executions[0][0]
+    assert "Orders.Artikelnummer = Stock.Artikelnummer" in cursor.query
 
 
 def test_intel_cpu_search_matches_names_with_or_without_description() -> None:
