@@ -1,0 +1,4 @@
+services: {}
+
+# Ollama and Qdrant are external services. Configure their addresses through
+# OLLAMA_BASE_URL and QDRANT_URL in ../docker-compose.yml or the project .env.

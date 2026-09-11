@@ -1,0 +1,71 @@
+services:
+  fastapi:
+    build: ./backend  
+    ports:
+      - "8000:8000"
+    environment:
+      - INTERNAL_API_KEY=${INTERNAL_API_KEY}
+      - EDESK_API_KEY=${EDESK_API_KEY}
+      - CACHE_DATABASE_PATH=/app/data/cache.db
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      - QDRANT_URL=${QDRANT_URL:-http://host.docker.internal:6333}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - fastapi_cache:/app/data
+
+
+  support-agent:
+    build: ./backend
+    env_file:
+      - ./backend/inventory_agent/ai_agent_sedatech/.env
+    command:
+      - streamlit
+      - run
+      - app.py
+      - --server.address=0.0.0.0
+      - --server.port=8501
+      - --server.headless=true
+    ports:
+      - "8503:8501"
+    environment:
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      QDRANT_URL: ${QDRANT_URL:-http://host.docker.internal:6333}
+      MODEL_PROVIDER: ${MODEL_PROVIDER:-local}
+      REPOSITORY_BACKEND: ${REPOSITORY_BACKEND:-sqlserver}
+      OLLAMA_TIMEOUT_SECONDS: ${OLLAMA_TIMEOUT_SECONDS:-30}
+      INVENTORY_MAX_TOOL_ROUNDS: ${INVENTORY_MAX_TOOL_ROUNDS:-3}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  cache-warmer:
+    build: ./backend
+    command: ["python", "script.py"]
+    environment:
+      - EDESK_API_KEY=${EDESK_API_KEY}
+      - INTERNAL_API_KEY=${INTERNAL_API_KEY}
+      - BACKEND_TICKETS_URL=http://fastapi:8000/tickets
+      - CACHE_WARM_INTERVAL_SECONDS=3600
+      - CACHE_WARM_CONCURRENCY=1
+    depends_on:
+      - fastapi
+    restart: unless-stopped
+
+  streamlit:
+    build: ./frontend
+    ports:
+      - "8502:8502"
+    environment:
+      - FASTAPI_INTERNAL_URL=${FASTAPI_INTERNAL_URL} 
+      - INTERNAL_API_KEY=${INTERNAL_API_KEY}
+      - APP_PASSWORD=${APP_PASSWORD}
+      - EDESK_API_KEY=${EDESK_API_KEY}
+    depends_on:
+      - fastapi
+
+
+volumes:
+  fastapi_cache:
