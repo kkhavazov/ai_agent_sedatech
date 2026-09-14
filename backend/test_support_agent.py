@@ -11,7 +11,7 @@ response = customer_support_agent.invoke(
         "messages": [
             {
                 "role": "user",
-                "content": "how many 16 gb ddr5 rams do we have?",
+                "content": "what components are we missing?",
             }
         ]
     },

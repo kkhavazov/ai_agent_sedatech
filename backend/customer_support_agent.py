@@ -36,6 +36,9 @@ model = ChatOllama(
     base_url=OLLAMA_ADDRESS,
     model="qwen3.5:9b", 
     temperature=0,
+    # Retrieved tickets and tool schemas need room alongside the final answer.
+    num_ctx=16384,
+    num_predict=2048,
 )
 
 #GEMINI
@@ -339,7 +342,7 @@ def analyze_data(
         "revenue", "order_count", "average_production_time"
     ]] = ["revenue", "order_count", "average_production_time"],
     group_by: list[Literal[
-        "year", "month", "platform", "country", "city", "postcode"
+        "week", "day", "year", "month", "platform", "country", "city", "postcode"
     ]] = ["year", "month"],
     filters: dict[str, str | int | float | bool] = {},
     date_from: str | None = None,
@@ -355,6 +358,8 @@ def analyze_data(
     use YYYY-MM-DD or YYYY-MM. For requests ending today, omit date_to. When
     the user asks for a graph, chart, plot, or visualization, set chart_type.
     Use line for time trends and bar for categorical comparisons.
+    Group by day for calendar dates or week for Monday-start weeks; both
+    return YYYY-MM-DD labels. Use week alone for complete weeks across years.
     """
     try:
         dns_error = _check_sql_dns()
@@ -421,12 +426,20 @@ def analyze_data(
         if chart_type is not None:
             points = []
             chart_rows = dataset["rows"]
-            if "year" in group_by and "month" in group_by:
+            date_group = next((key for key in ("day", "week") if key in group_by), None)
+            if date_group:
+                chart_rows = sorted(chart_rows, key=lambda row: row.get(date_group) or "")
+            elif "year" in group_by and "month" in group_by:
                 chart_rows = sorted(
                     chart_rows, key=lambda row: (row["year"], row["month"])
                 )
             for row in chart_rows:
-                if "year" in group_by and "month" in group_by:
+                if date_group:
+                    x_value = " / ".join(
+                        str(row.get(key, ""))
+                        for key in [date_group] + [key for key in group_by if key != date_group]
+                    )
+                elif "year" in group_by and "month" in group_by:
                     x_value = date(
                         int(row["year"]), int(row["month"]), 1
                     ).strftime("%b %Y")

@@ -48,6 +48,7 @@ services:
       - EDESK_API_KEY=${EDESK_API_KEY}
       - INTERNAL_API_KEY=${INTERNAL_API_KEY}
       - BACKEND_TICKETS_URL=http://fastapi:8000/tickets
+      - QDRANT_URL=${QDRANT_URL:-http://host.docker.internal:6333}
       - CACHE_WARM_INTERVAL_SECONDS=3600
       - CACHE_WARM_CONCURRENCY=1
     depends_on:

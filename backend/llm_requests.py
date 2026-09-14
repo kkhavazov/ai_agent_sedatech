@@ -9,7 +9,7 @@ from qdrant_client.models import Filter, FieldCondition, MatchValue
 load_dotenv()
 
 OLLAMA_ADDRESS = os.getenv("OLLAMA_BASE_URL", "http://192.168.125.110:11434")
-QDRANT_URL = os.getenv("QDRANT_URL", "http://192.168.125.110:6333")
+QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
 COLLECTION_NAME = "ticket_chunks"
 EMBED_MODEL = "bge-m3"
 CHAT_MODEL = "qwen3.5:9b"
