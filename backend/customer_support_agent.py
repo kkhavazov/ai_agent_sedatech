@@ -403,10 +403,12 @@ def analyze_data(
         arguments = {
             key: value for key, value in arguments.items() if value is not None
         }
+        logger.debug("Analysis query arguments: %s", json.dumps(arguments, default=str))
         result = inventory_agent.tool_registry.execute(
             "analyze_data",
             arguments,
         )
+        logger.debug("Analysis repository result: %s", json.dumps(result, default=str))
         if not result["success"]:
             error = result["error"] or {}
             raise RuntimeError(error.get("message", "Order data query failed"))
@@ -463,6 +465,7 @@ def analyze_data(
                 "data": points[:100],
             }
             response["answer"] = "The requested chart is displayed below."
+            logger.debug("Analysis chart: %s", json.dumps(response["chart"], default=str))
         return response
     except Exception as exc:
         message = str(exc)
