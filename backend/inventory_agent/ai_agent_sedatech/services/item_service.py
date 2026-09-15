@@ -1,16 +1,28 @@
 from __future__ import annotations
 
+import sqlite3
+from datetime import datetime
+from pathlib import Path
 from typing import Literal
+from zoneinfo import ZoneInfo
 
-from models.item import ItemsSearchResponse
+from models.item import ComponentForecast, ItemsSearchResponse
 from repositories.item_repository import ItemRepository
 
 class ItemNotFoundError(LookupError):
     pass
 
 class ItemService:
-    def __init__(self, repository: ItemRepository) -> None:
+    def __init__(
+        self,
+        repository: ItemRepository,
+        forecast_database_path: str | Path | None = None,
+    ) -> None:
         self.repository = repository
+        self.forecast_database_path = Path(
+            forecast_database_path
+            or Path(__file__).with_name("forecast.db")
+        )
 
     def search_items(
         self,
@@ -79,3 +91,136 @@ class ItemService:
             gpu_model=gpu_model,
             gpu_vram=gpu_vram,
         )
+
+    @staticmethod
+    def _initialize_forecast_database(connection: sqlite3.Connection) -> None:
+        connection.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS forecast_runs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                created_at TEXT NOT NULL,
+                weeks INTEGER NOT NULL DEFAULT 1
+            );
+            CREATE TABLE IF NOT EXISTS inventory_forecast (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                run_id INTEGER NOT NULL,
+                sku TEXT NOT NULL,
+                name TEXT NOT NULL,
+                forecast_weekly REAL NOT NULL,
+                stock_coverage REAL NOT NULL,
+                FOREIGN KEY (run_id) REFERENCES forecast_runs(id)
+            );
+            """
+        )
+        columns = {
+            row[1]
+            for row in connection.execute("PRAGMA table_info(forecast_runs)")
+        }
+        if "weeks" not in columns:
+            connection.execute(
+                "ALTER TABLE forecast_runs "
+                "ADD COLUMN weeks INTEGER NOT NULL DEFAULT 1"
+            )
+
+    @staticmethod
+    def _load_cached_forecast(
+        connection: sqlite3.Connection,
+        *,
+        created_on: str,
+        weeks: int,
+    ) -> list[ComponentForecast] | None:
+        run = connection.execute(
+            """
+            SELECT id
+            FROM forecast_runs
+            WHERE substr(created_at, 1, 10) = ? AND weeks = ?
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            (created_on, weeks),
+        ).fetchone()
+        if run is None:
+            return None
+
+        rows = connection.execute(
+            """
+            SELECT sku, name, forecast_weekly, stock_coverage
+            FROM inventory_forecast
+            WHERE run_id = ?
+            ORDER BY stock_coverage DESC, name
+            """,
+            (run[0],),
+        ).fetchall()
+        return [
+            ComponentForecast(
+                sku=str(row[0]),
+                name=str(row[1]),
+                weekly_forecast=float(row[2]),
+                stock_coverage=float(row[3]),
+            )
+            for row in rows
+        ]
+
+    @staticmethod
+    def _save_forecast(
+        connection: sqlite3.Connection,
+        forecast: list[ComponentForecast],
+        *,
+        created_at: datetime,
+        weeks: int,
+    ) -> None:
+        cursor = connection.execute(
+            "INSERT INTO forecast_runs (created_at, weeks) VALUES (?, ?)",
+            (created_at.isoformat(), weeks),
+        )
+        run_id = cursor.lastrowid
+        connection.executemany(
+            """
+            INSERT INTO inventory_forecast (
+                run_id, sku, name, forecast_weekly, stock_coverage
+            ) VALUES (?, ?, ?, ?, ?)
+            """,
+            [
+                (
+                    run_id,
+                    item.sku,
+                    item.name,
+                    item.weekly_forecast,
+                    item.stock_coverage,
+                )
+                for item in forecast
+            ],
+        )
+
+    def forecast_components(
+        self,
+        weeks: int = 1,
+        *,
+        now: datetime | None = None,
+        force: bool = False,
+    ) -> list[ComponentForecast]:
+        if not 1 <= weeks <= 52:
+            raise ValueError("weeks must be between 1 and 52")
+
+        now = now or datetime.now(ZoneInfo("Europe/Berlin"))
+        self.forecast_database_path.parent.mkdir(parents=True, exist_ok=True)
+
+        with sqlite3.connect(self.forecast_database_path) as connection:
+            self._initialize_forecast_database(connection)
+            if not force:
+                cached = self._load_cached_forecast(
+                    connection,
+                    created_on=now.date().isoformat(),
+                    weeks=weeks,
+                )
+                if cached is not None:
+                    return cached
+
+            forecast = self.repository.get_components_forecast(weeks=weeks)
+            self._save_forecast(
+                connection,
+                forecast,
+                created_at=now,
+                weeks=weeks,
+            )
+            return forecast

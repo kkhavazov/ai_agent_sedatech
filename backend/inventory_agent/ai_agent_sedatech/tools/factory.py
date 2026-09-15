@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from models.item import ORDERED_AMOUNT_DESCRIPTION
 from services.order_service import OrderService
 from services.item_service import ItemService
 from services.missing_service import MissingComponentService
@@ -14,6 +15,10 @@ from tools.orders.filter_orders import (
 from tools.items.search_item import (
     SearchItemsArguments,
     create_search_items_handler,
+)
+from tools.items.forecast_components import (
+    ForecastComponentsArguments,
+    create_forecast_components_handler,
 )
 from tools.current_time_tools import (
     create_current_time_handler,
@@ -101,10 +106,24 @@ def build_tool_registry(
                 description=(
                     "Return each available article matching the filters, grouped "
                     "by article number and name, with its SKU, inventory amount, "
-                    "ordered amount, and price statistics."
+                    "ordered amount, and price statistics. "
+                    "The ordered field means: " + ORDERED_AMOUNT_DESCRIPTION
                 ),
                 arguments_model=SearchItemsArguments,
                 handler=create_search_items_handler(item_service),
+            )
+        )
+        registry.register(
+            ToolDefinition(
+                name="forecast_components",
+                description=(
+                    "Forecast which PC components should be ordered for the "
+                    "requested number of upcoming weeks. Returns only components "
+                    "whose forecast demand exceeds current and incoming stock; "
+                    "stock_coverage is the suggested quantity to order."
+                ),
+                arguments_model=ForecastComponentsArguments,
+                handler=create_forecast_components_handler(item_service),
             )
         )
     if missing_component_service is not None:

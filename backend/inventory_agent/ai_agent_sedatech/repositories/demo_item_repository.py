@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Literal
 
 from models.order import OrderItem
-from models.item import ItemsSearchResponse
+from models.item import ComponentForecast, ItemsSearchResponse
 from repositories.item_repository import ItemRepository
 
 
@@ -89,4 +89,17 @@ class DemoItemRepository(ItemRepository):
                 average_price=float(item.price or 0),
             )
             for item in items
+        ]
+
+    def get_components_forecast(
+        self,
+        weeks: int = 1,
+    ) -> list[ComponentForecast]:
+        return [
+            ComponentForecast(
+                sku="CP00001",
+                name="Demo CPU",
+                weekly_forecast=3.0 * weeks,
+                stock_coverage=2.0 * weeks,
+            )
         ]

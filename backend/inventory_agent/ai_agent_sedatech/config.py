@@ -78,6 +78,9 @@ class Settings:
         "SQLSERVER_QUERY_TIMEOUT_SECONDS",
         30,
     )
+    forecast_run_hour: int = _get_int("FORECAST_RUN_HOUR", 8)
+    forecast_run_minute: int = _get_int("FORECAST_RUN_MINUTE", 0)
+    forecast_weeks: int = _get_int("FORECAST_WEEKS", 1)
 
     def validate(self) -> None:
         if self.model_provider not in {
@@ -96,6 +99,13 @@ class Settings:
             raise ValueError(
                 "REPOSITORY_BACKEND must be demo or sqlserver"
             )
+
+        if not 0 <= self.forecast_run_hour <= 23:
+            raise ValueError("FORECAST_RUN_HOUR must be between 0 and 23")
+        if not 0 <= self.forecast_run_minute <= 59:
+            raise ValueError("FORECAST_RUN_MINUTE must be between 0 and 59")
+        if not 1 <= self.forecast_weeks <= 52:
+            raise ValueError("FORECAST_WEEKS must be between 1 and 52")
 
         if (
             self.model_provider in {"gemini", "hybrid"}

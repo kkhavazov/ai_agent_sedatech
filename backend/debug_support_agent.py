@@ -3,6 +3,7 @@
 import argparse
 import json
 import logging
+import os
 from uuid import uuid4
 
 
@@ -10,12 +11,21 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("prompt", nargs="?", help="Question to send to the support agent")
     parser.add_argument(
+        "--ollama-base-url",
+        help="Override OLLAMA_BASE_URL (for local Ollama, use http://localhost:11434)",
+    )
+    parser.add_argument(
         "--analysis-json",
         help="Call analyze_data directly with JSON arguments, bypassing model routing",
     )
     args = parser.parse_args()
     if bool(args.prompt) == bool(args.analysis_json):
         parser.error("Provide either a prompt or --analysis-json")
+
+    # Both support and inventory clients read this during import. dotenv preserves
+    # an explicitly set environment variable.
+    if args.ollama_base_url:
+        os.environ["OLLAMA_BASE_URL"] = args.ollama_base_url
 
     logging.basicConfig(level=logging.WARNING, format="%(name)s %(levelname)s: %(message)s")
     logging.getLogger("customer_support_agent").setLevel(logging.DEBUG)

@@ -7,7 +7,7 @@ import pymssql
 
 from repositories.item_repository import ItemRepository
 
-from models.item import ItemsSearchResponse
+from models.item import ComponentForecast, ItemsSearchResponse
 
 from tools.items.case_inventory import case_inventory as case_inventory
 
@@ -53,7 +53,7 @@ class SqlServerItemRepository(ItemRepository):
             timeout=self.query_timeout_seconds,
         )
 
-    def search_inventory(
+    def _build_article_filters(
         self,
         *,
         sku: str | None = None,
@@ -73,7 +73,7 @@ class SqlServerItemRepository(ItemRepository):
         gpu_series: Literal["Geforce", "Radeon", "Quadro", "Nvidia"] | None = None,
         gpu_model: str | None = None,
         gpu_vram: int | None = None,
-    ) -> list[ItemsSearchResponse]:
+    ) -> tuple[list[str], list[Any]]:
         filters: list[str] = []
         parameters: list[Any] = []
 
@@ -182,6 +182,9 @@ class SqlServerItemRepository(ItemRepository):
                 else:
                     filters.append("ART.Bezeichnung LIKE %s")
                     parameters.append("%2048MB%")
+        return filters, parameters
+
+    def _build_inventory_query(self, filters: list[str]) -> str:
         where_sql = "WHERE " + " AND ".join(
             [
                 "SERIE.SCTyp <> 'O'",
@@ -204,7 +207,7 @@ class SqlServerItemRepository(ItemRepository):
                 + ")",
             ]
         )
-        query = f"""
+        return f"""
             SELECT
                 Stock.Artikelnummer,
                 Stock.Bezeichnung,
@@ -249,6 +252,48 @@ class SqlServerItemRepository(ItemRepository):
                 ORDER BY Stock.Bezeichnung
         """
 
+    def search_inventory(
+        self,
+        *,
+        sku: str | None = None,
+        category: str | None = None,
+        item_name: str | None = None,
+        ram_capacity: int | None = None,
+        ram_ddr: int | None = None,
+        ram_speed: int | None = None,
+        cpu_manufacturer: Literal["Intel", "AMD"] | None = None,
+        cpu_generation: int | None = None,
+        cpu_model: str | None = None,
+        hdd_capacity: int | None = None,
+        hdd_type: Literal["HDD", "SSD"] | None = None,
+        case_manufacturer: str | None = None,
+        case_model: str | None = None,
+        gpu_manufacturer: Literal["NVIDIA", "AMD"] | None = None,
+        gpu_series: Literal["Geforce", "Radeon", "Quadro", "Nvidia"] | None = None,
+        gpu_model: str | None = None,
+        gpu_vram: int | None = None,
+    ) -> list[ItemsSearchResponse]:
+        filters, parameters = self._build_article_filters(
+            sku=sku,
+            category=category,
+            item_name=item_name,
+            ram_capacity=ram_capacity,
+            ram_ddr=ram_ddr,
+            ram_speed=ram_speed,
+            cpu_manufacturer=cpu_manufacturer,
+            cpu_generation=cpu_generation,
+            cpu_model=cpu_model,
+            hdd_capacity=hdd_capacity,
+            hdd_type=hdd_type,
+            case_manufacturer=case_manufacturer,
+            case_model=case_model,
+            gpu_manufacturer=gpu_manufacturer,
+            gpu_series=gpu_series,
+            gpu_model=gpu_model,
+            gpu_vram=gpu_vram,
+        )
+        query = self._build_inventory_query(filters)
+
         connection = None
         cursor = None
         try:
@@ -284,17 +329,136 @@ class SqlServerItemRepository(ItemRepository):
             ))
         return result
 
-    def get_popular_items(
-        self, 
-    ):
-        
+    def get_components_forecast(
+        self,
+        weeks: int = 1,
+    ) -> list[ComponentForecast]:
+        query = """
+        WITH PopularComponents AS (
+            SELECT
+                BELEGP.Artikelnummer
+            FROM dbo.BELEGP
+            INNER JOIN dbo.ART
+                ON BELEGP.Artikelnummer = ART.Artikelnummer
+            WHERE
+                BELEGP.Datum >= DATEADD(day, -84, GETDATE())
+                AND ART.Artikelgruppe IN ('TW', 'GC', 'CP', 'NW', 'ME', 'HD', 'MB', 'PS', 'FA', 'OP')
+            GROUP BY
+                BELEGP.Artikelnummer
+            HAVING
+                SUM(BELEGP.Menge) >= 2
+            ), Usage AS (
+            SELECT
+                BELEGP.Artikelnummer,
+
+                SUM(
+                    CASE
+                        WHEN BELEGP.Datum >= DATEADD(day, -28, GETDATE())
+                        THEN BELEGP.Menge
+                        ELSE 0
+                    END
+                ) AS UsageWeeks1To4,
+
+                SUM(
+                    CASE
+                        WHEN BELEGP.Datum >= DATEADD(day, -56, GETDATE())
+                        AND BELEGP.Datum < DATEADD(day, -28, GETDATE())
+                        THEN BELEGP.Menge
+                        ELSE 0
+                    END
+                ) AS UsageWeeks5To8,
+
+                SUM(
+                    CASE
+                        WHEN BELEGP.Datum >= DATEADD(day, -84, GETDATE())
+                        AND BELEGP.Datum < DATEADD(day, -56, GETDATE())
+                        THEN BELEGP.Menge
+                        ELSE 0
+                    END
+                ) AS UsageWeeks9To12
+
+            FROM dbo.BELEGP
+
+            INNER JOIN dbo.ART
+                ON BELEGP.Artikelnummer = ART.Artikelnummer
+
+            INNER JOIN PopularComponents
+                ON BELEGP.Artikelnummer = PopularComponents.Artikelnummer
+
+            WHERE
+                BELEGP.Datum >= DATEADD(day, -84, GETDATE())
+                AND ART.Artikelgruppe IN ('TW', 'GC', 'CP', 'NW', 'ME', 'HD', 'MB', 'PS', 'FA', 'OP')
+
+            GROUP BY
+                BELEGP.Artikelnummer
+        ), Stock AS (
+            SELECT
+                SERIE.Artikelnummer,
+                SUM(LAGERP.Bestand) AS CurrentStock
+            FROM dbo.LAGERP
+
+            INNER JOIN dbo.SERIE
+                ON SERIE.Id = LAGERP.IdSerie
+
+            INNER JOIN PopularComponents PC
+                ON PC.Artikelnummer = SERIE.Artikelnummer
+
+            GROUP BY
+                SERIE.Artikelnummer
+        ), Incoming AS (
+            SELECT
+                BELEGP.Artikelnummer,
+                SUM(BELEGP.Menge) AS OrderedAmount
+            FROM dbo.BELEG
+
+            INNER JOIN dbo.BELEGP
+                ON BELEGP.Belegnummer = BELEG.Belegnummer
+
+            INNER JOIN PopularComponents PC
+                ON PC.Artikelnummer = BELEGP.Artikelnummer
+
+            WHERE
+                BELEG.Belegtyp = 'B'
+                AND BELEG.UebernahmeOffen < 0
+
+            GROUP BY
+                BELEGP.Artikelnummer
+        )
+            SELECT
+            PC.Artikelnummer AS SKU,
+            ART.Bezeichnung AS Name,
+
+            COALESCE(S.CurrentStock, 0) AS CurrentStock,
+            COALESCE(I.OrderedAmount, 0) AS OrderedAmount,
+
+            COALESCE(U.UsageWeeks1To4, 0) AS UsageWeeks1To4,
+            COALESCE(U.UsageWeeks5To8, 0) AS UsageWeeks5To8,
+            COALESCE(U.UsageWeeks9To12, 0) AS UsageWeeks9To12
+
+        FROM PopularComponents PC
+
+        INNER JOIN dbo.ART
+            ON ART.Artikelnummer = PC.Artikelnummer
+
+        LEFT JOIN Stock S
+            ON S.Artikelnummer = PC.Artikelnummer
+
+        LEFT JOIN Incoming I
+            ON I.Artikelnummer = PC.Artikelnummer
+
+        LEFT JOIN Usage U
+            ON U.Artikelnummer = PC.Artikelnummer
+
+        ORDER BY
+            ART.Bezeichnung;
+"""
         
         connection = None
         cursor = None
         try:
             connection = self._connect()
             cursor = connection.cursor()
-            cursor.execute(query, tuple(parameters + parameters))
+            cursor.execute(query)
             main_row = cursor.fetchall()
         except pymssql.Error as exc:
             logger.exception("Inventory search failed")
@@ -306,3 +470,28 @@ class SqlServerItemRepository(ItemRepository):
                 cursor.close()
             if connection is not None:
                 connection.close()
+        result: list[ComponentForecast] = []
+        for component in main_row:
+            usage_1_4 = float(component["UsageWeeks1To4"] or 0)
+            usage_5_8 = float(component["UsageWeeks5To8"] or 0)
+            usage_9_12 = float(component["UsageWeeks9To12"] or 0)
+            weekly_forecast = (
+                (usage_1_4 / 4 * 0.50
+                + usage_5_8 / 4 * 0.30
+                + usage_9_12 / 4 * 0.20)*weeks
+            )
+            stock_coverage = (
+                weekly_forecast
+                - float(component["CurrentStock"] or 0)
+                - float(component["OrderedAmount"] or 0)
+            )
+            if stock_coverage > 0:
+                result.append(
+                    ComponentForecast(
+                        sku=str(component["SKU"]),
+                        name=str(component["Name"]),
+                        weekly_forecast=weekly_forecast,
+                        stock_coverage=stock_coverage,
+                    )
+                )
+        return result

@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Literal
 
-from models.item import ItemsSearchResponse
+from models.item import ComponentForecast, ItemsSearchResponse
 
 class ItemRepository(ABC):
     @abstractmethod
@@ -28,4 +28,11 @@ class ItemRepository(ABC):
         gpu_model: str | None = None,
         gpu_vram: int | None = None,
     ) -> list[ItemsSearchResponse]:
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_components_forecast(
+        self,
+        weeks: int = 1,
+    ) -> list[ComponentForecast]:
         raise NotImplementedError

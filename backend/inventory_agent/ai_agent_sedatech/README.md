@@ -43,6 +43,22 @@ Run the agent:
 python app.py
 ```
 
+Run the component forecast worker in a separate terminal or service process:
+
+```powershell
+python -m services.forecast_worker
+```
+
+The worker warms the forecast cache when it starts and refreshes it every day
+using the Europe/Berlin timezone. Configure its schedule and forecast horizon in
+`.env`:
+
+```env
+FORECAST_RUN_HOUR=8
+FORECAST_RUN_MINUTE=0
+FORECAST_WEEKS=1
+```
+
 Try:
 
 ```text

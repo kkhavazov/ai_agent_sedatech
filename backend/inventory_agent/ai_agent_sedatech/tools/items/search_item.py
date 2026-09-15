@@ -6,6 +6,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
+from models.item import ORDERED_AMOUNT_DESCRIPTION
 from repositories.sqlserver_item_repository import case_inventory
 from services.item_service import ItemService
 
@@ -390,6 +391,7 @@ def create_search_items_handler(item_service: ItemService):
                 "gpu_vram": args.gpu_vram,
             },
             "items": [asdict(item) for item in result],
+            "field_descriptions": {"ordered": ORDERED_AMOUNT_DESCRIPTION},
         }
 
     return search_items_handler
