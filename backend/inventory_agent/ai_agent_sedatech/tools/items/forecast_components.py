@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import asdict
-
 from pydantic import BaseModel, Field
 
 from services.item_service import ItemService
@@ -22,7 +20,17 @@ def create_forecast_components_handler(item_service: ItemService):
         return {
             "weeks": weeks,
             "count": len(components),
-            "components": [asdict(component) for component in components],
+            "components": [
+                {
+                    "sku": component.sku,
+                    "name": component.name,
+                    # The repository stores these under legacy internal names.
+                    # Expose unambiguous names to the language model.
+                    "forecast_demand": component.weekly_forecast,
+                    "suggested_order_quantity": component.stock_coverage,
+                }
+                for component in components
+            ],
         }
 
     return handler

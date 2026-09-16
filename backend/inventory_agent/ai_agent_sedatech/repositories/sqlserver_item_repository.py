@@ -343,6 +343,7 @@ class SqlServerItemRepository(ItemRepository):
             WHERE
                 BELEGP.Datum >= DATEADD(day, -84, GETDATE())
                 AND ART.Artikelgruppe IN ('TW', 'GC', 'CP', 'NW', 'ME', 'HD', 'MB', 'PS', 'FA', 'OP')
+                AND BELEGP.Belegtyp = 'R'
             GROUP BY
                 BELEGP.Artikelnummer
             HAVING
@@ -387,7 +388,7 @@ class SqlServerItemRepository(ItemRepository):
 
             WHERE
                 BELEGP.Datum >= DATEADD(day, -84, GETDATE())
-                AND ART.Artikelgruppe IN ('TW', 'GC', 'CP', 'NW', 'ME', 'HD', 'MB', 'PS', 'FA', 'OP')
+                AND BELEGP.Belegtyp = 'R'
 
             GROUP BY
                 BELEGP.Artikelnummer

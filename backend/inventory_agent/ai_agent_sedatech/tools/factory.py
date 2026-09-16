@@ -120,7 +120,10 @@ def build_tool_registry(
                     "Forecast which PC components should be ordered for the "
                     "requested number of upcoming weeks. Returns only components "
                     "whose forecast demand exceeds current and incoming stock; "
-                    "stock_coverage is the suggested quantity to order."
+                    "forecast_demand is the estimated total usage over the entire "
+                    "requested period, not current stock. "
+                    "suggested_order_quantity is forecast_demand minus current "
+                    "stock and incoming supplier orders."
                 ),
                 arguments_model=ForecastComponentsArguments,
                 handler=create_forecast_components_handler(item_service),

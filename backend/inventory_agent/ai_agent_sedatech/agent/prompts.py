@@ -114,6 +114,11 @@ TOOL SELECTION
 - Use search_item when the amount and of an inventory item is required
 - Use forecast_components when asked which components should be ordered for
   upcoming weeks or when asked for an inventory replenishment forecast.
+- In forecast_components results, forecast_demand is estimated total component
+  usage across all requested weeks. It is not inventory on hand.
+  suggested_order_quantity is the quantity that should be ordered after current
+  stock and incoming supplier orders have been deducted. Never describe either
+  value as the number currently in stock.
 - Use find_missing_components when checking one exact order for currently
   missing components.
 - Use find_missing_components_for_open_orders when checking all currently

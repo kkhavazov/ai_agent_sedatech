@@ -70,8 +70,8 @@ def test_handler_returns_serializable_forecast(tmp_path) -> None:
             {
                 "sku": "CP00001",
                 "name": "Test CPU",
-                "weekly_forecast": 13.5,
-                "stock_coverage": 7.5,
+                "forecast_demand": 13.5,
+                "suggested_order_quantity": 7.5,
             }
         ],
     }
