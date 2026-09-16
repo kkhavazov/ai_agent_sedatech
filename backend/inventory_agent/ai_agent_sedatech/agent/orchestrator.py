@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import date
 
 from agent.prompts import SYSTEM_PROMPT
 from agent.state import AgentState
@@ -27,7 +28,10 @@ class SupportAgent:
 
         state = AgentState(user_request=request.strip())
         state.messages = [
-            {"role": "system", "content": SYSTEM_PROMPT},
+            {
+                "role": "system",
+                "content": f"Today's date is {date.today().isoformat()}.\n\n{SYSTEM_PROMPT}",
+            },
             {"role": "user", "content": state.user_request},
         ]
 

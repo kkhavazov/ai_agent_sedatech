@@ -10,6 +10,7 @@ from repositories.demo_item_repository import DemoItemRepository
 from repositories.item_repository import ItemRepository
 from repositories.order_repository import OrderRepository
 from repositories.sqlserver_item_repository import SqlServerItemRepository
+from repositories.sqlserver_emails_repository import SqlServerEmailsRepository
 from repositories.sqlserver_missing_repository import SqlServerMissingRepository
 from repositories.sqlserver_order_repository import SqlServerOrderRepository
 from services.item_service import ItemService
@@ -73,7 +74,18 @@ def build_agent(settings: Settings | None = None) -> SupportAgent:
     order_service = OrderService(repository)
     item_service = ItemService(build_item_repository(settings))
     missing_component_service = None
+    emails_repository = None
     if settings.repository_backend == "sqlserver":
+        emails_repository = SqlServerEmailsRepository(
+            server=settings.sqlserver_server,
+            user=settings.sqlserver_user,
+            password=settings.sqlserver_password,
+            database=settings.sqlserver_database,
+            tds_version=settings.sqlserver_tds_version,
+            port=settings.sqlserver_port,
+            login_timeout_seconds=settings.sqlserver_login_timeout_seconds,
+            query_timeout_seconds=settings.sqlserver_query_timeout_seconds,
+        )
         missing_repository = SqlServerMissingRepository(
             server=settings.sqlserver_server or "",
             user=settings.sqlserver_user or "",
@@ -95,6 +107,7 @@ def build_agent(settings: Settings | None = None) -> SupportAgent:
         order_service,
         item_service,
         missing_component_service,
+        emails_repository=emails_repository,
     )
 
 
@@ -102,6 +115,7 @@ def build_agent(settings: Settings | None = None) -> SupportAgent:
         base_url=settings.ollama_base_url,
         model=settings.ollama_model,
         timeout_seconds=settings.ollama_timeout_seconds,
+        settings=settings,
     )
 
     gemini_client = None

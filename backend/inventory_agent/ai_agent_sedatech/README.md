@@ -20,6 +20,10 @@ tests/                   unit tests
 
 ## Setup
 
+Model settings are shared with the backend. See
+[`MODEL_CONFIGURATION.md`](../../MODEL_CONFIGURATION.md) for environment
+variables and precedence, including standalone CLI usage.
+
 Use Python 3.11 or newer.
 
 ```powershell

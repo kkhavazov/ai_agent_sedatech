@@ -1,22 +1,22 @@
-from dotenv import load_dotenv
 import os
 from prompts import prompt
 
 from ollama import Client
 from qdrant_client import QdrantClient
 from qdrant_client.models import Filter, FieldCondition, MatchValue
+from inventory_agent.ai_agent_sedatech.model_settings import ModelSettings
 
-load_dotenv()
 
-OLLAMA_ADDRESS = os.getenv("OLLAMA_BASE_URL", "http://192.168.125.110:11434")
+model_settings = ModelSettings()
+OLLAMA_ADDRESS = model_settings.ollama_base_url
 QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
 COLLECTION_NAME = "ticket_chunks"
-EMBED_MODEL = "bge-m3"
-CHAT_MODEL = "qwen3.5:9b"
+EMBED_MODEL = model_settings.embedding_model
+CHAT_MODEL = model_settings.ollama_model
 TOP_K = 5
 MAX_VERBATIM_TURNS = 8  # keep the last N turns in full; summarize anything older
 
-ollama_client = Client(OLLAMA_ADDRESS)
+ollama_client = Client(OLLAMA_ADDRESS, timeout=model_settings.ollama_timeout_seconds)
 qdrant_client = QdrantClient(url=QDRANT_URL)
 
 SYSTEM_INSTRUCTIONS = """You are a customer support assistant helping an agent respond to a customer.
@@ -49,7 +49,8 @@ class Conversation:
 
     def _embed(self, text: str) -> list[float]:
         response = ollama_client.embed(
-            model=EMBED_MODEL, input=[text], options={"num_ctx": 8192}, truncate=True
+            model=EMBED_MODEL, input=[text],
+            options={"num_ctx": model_settings.embedding_num_ctx}, truncate=True,
         )
         return response.embeddings[0]
 
@@ -96,7 +97,10 @@ tried so far. Be factual, no speculation.
 
 Summary:"""
 
-        response = ollama_client.chat(model=CHAT_MODEL, messages=[{"role": "user", "content": prompt}])
+        response = ollama_client.chat(
+            **model_settings.chat_kwargs(),
+            messages=[{"role": "user", "content": prompt}],
+        )
         self.summary = response["message"]["content"].strip()
 
     def get_agent_reply(self, customer_message: str) -> dict:
@@ -128,13 +132,7 @@ Summary:"""
             *self.turns,
         ]
 
-        response = ollama_client.chat(model=CHAT_MODEL, 
-        messages=messages, 
-        think = False, 
-        options={
-        "temperature": 0.1,
-        "num_ctx": 16384,
-    })
+        response = ollama_client.chat(**model_settings.chat_kwargs(), messages=messages)
         reply = response["message"]["content"]
         self.add_agent_message(reply)
 
@@ -167,13 +165,12 @@ def reprompt_call(instructions, last_response):
     from google import genai
     from google.genai import types
     
-    load_dotenv()  
 
-    client = genai.Client()
+    client = genai.Client(api_key=model_settings.gemini_api_key)
 
     full_prompt = f"{instructions}\n\nBase context / Last message:\n{last_response}"
     response = client.models.generate_content(
-        model='gemini-2.5-flash',
+        model=model_settings.gemini_model,
         contents=full_prompt,
     )
 

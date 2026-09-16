@@ -3,9 +3,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
-from dotenv import load_dotenv
-
-load_dotenv()
+from model_settings import ModelSettings
 
 
 def _get_int(name: str, default: int) -> int:
@@ -23,26 +21,11 @@ def _get_int(name: str, default: int) -> int:
 
 
 @dataclass(frozen=True, slots=True)
-class Settings:
+class Settings(ModelSettings):
     app_env: str = os.getenv("APP_ENV", "development")
     log_level: str = os.getenv("LOG_LEVEL", "INFO")
 
     model_provider: str = os.getenv("MODEL_PROVIDER", "local")
-    ollama_base_url: str = os.getenv(
-        "OLLAMA_BASE_URL",
-        "http://localhost:11434",
-    )
-    ollama_model: str = os.getenv("OLLAMA_MODEL", "qwen3.5:9b")
-    ollama_timeout_seconds: int = _get_int(
-        "OLLAMA_TIMEOUT_SECONDS",
-        120,
-    )
-
-    gemini_api_key: str | None = os.getenv("GEMINI_API_KEY") or None
-    gemini_model: str = os.getenv(
-        "GEMINI_MODEL",
-        "gemini-2.5-flash",
-    )
 
     repository_backend: str = os.getenv(
         "REPOSITORY_BACKEND",

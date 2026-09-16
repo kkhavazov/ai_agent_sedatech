@@ -5,6 +5,7 @@ from typing import Any
 import requests
 
 from llm.base import LLMClient, LLMResponse, ToolCall
+from model_settings import ModelSettings
 
 
 class OllamaClient(LLMClient):
@@ -12,11 +13,13 @@ class OllamaClient(LLMClient):
         self,
         base_url: str,
         model: str,
-        timeout_seconds: int = 120,
+        timeout_seconds: int | None = None,
+        settings: ModelSettings | None = None,
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.model = model
-        self.timeout_seconds = timeout_seconds
+        self.settings = settings or ModelSettings()
+        self.timeout_seconds = timeout_seconds if timeout_seconds is not None else self.settings.ollama_timeout_seconds
         self.name = f"ollama:{model}"
 
     def chat(
@@ -28,10 +31,9 @@ class OllamaClient(LLMClient):
             "model": self.model,
             "messages": messages,
             "stream": False,
-            "options": {
-                "num_ctx": 16384,
-                "num_predict": 2048,
-            },
+            "options": self.settings.ollama_options(),
+            "think": self.settings.ollama_think,
+            "keep_alive": self.settings.ollama_keep_alive,
         }
         if tools:
             payload["tools"] = tools

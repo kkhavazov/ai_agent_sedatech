@@ -1,6 +1,7 @@
 import ast
 import json
 import logging
+import os
 import queue
 import socket
 import sys
@@ -25,7 +26,7 @@ from langchain_experimental.agents.agent_toolkits import (
 from langchain_experimental.tools.python.tool import PythonAstREPLTool
 from pydantic import BaseModel, Field
 
-from llm_requests import Conversation, OLLAMA_ADDRESS
+from llm_requests import Conversation, model_settings
 
 
 logger = logging.getLogger(__name__)
@@ -33,23 +34,16 @@ logger = logging.getLogger(__name__)
 from langchain_ollama import ChatOllama
 
 model = ChatOllama(
-    base_url=OLLAMA_ADDRESS,
-    model="qwen3.5:9b", 
-    temperature=0,
-    # Retrieved tickets and tool schemas need room alongside the final answer.
-    num_ctx=16384,
-    num_predict=2048,
+    base_url=model_settings.ollama_base_url,
+    model=model_settings.ollama_model,
+    **model_settings.ollama_options(),
+    reasoning=model_settings.ollama_think,
+    keep_alive=model_settings.ollama_keep_alive,
+    client_kwargs={"timeout": model_settings.ollama_timeout_seconds},
 )
 
-#GEMINI
-import os
-from dotenv import load_dotenv
 
-load_dotenv()
 
-os.environ["GEMINI_API_KEY"]
-
-# model = init_chat_model("google_genai:gemini-2.5-flash")
 
 
 class ChartPoint(BaseModel):
@@ -188,10 +182,6 @@ def _get_inventory_agent():
     if not project_dir.is_dir():
         raise RuntimeError(f"Inventory agent was not found at {project_dir}")
 
-    # When the cloned project is imported from the backend, python-dotenv would
-    # otherwise search the backend working directory and miss this file.
-    load_dotenv(project_dir / ".env", override=False)
-
     # The cloned project uses top-level imports such as `from agent...`, so its
     # project root must be importable until those imports are made package-relative.
     project_dir_text = str(project_dir)
@@ -237,7 +227,10 @@ def _check_sql_dns(timeout_seconds: float = 5.0) -> str | None:
 def query_inventory(request: str) -> dict:
     """Use the inventory agent for order status, order lifecycle, order counts,
     individual order details, item status, product availability, stock quantities,
-    SKUs, cases, customers, missing components, or the current Berlin date/time.
+    SKUs, cases, customers, customer email addresses from Sedatech invoices,
+    missing components, or the current Berlin date/time.
+    Requests such as 'show me emails from 10th of September 2026' are customer
+    email-address lookups and must use this tool, including date-filtered requests.
     The inventory agent selects the appropriate specialized inventory tool. Pass
     the user's complete original question unchanged, preserving order numbers,
     product names, model numbers, and SKUs. Do not use analyze_data for
@@ -506,7 +499,14 @@ customer_support_agent = create_agent(
         "query_inventory for every operational inventory request: order status or "
         "lifecycle, simple order counts, individual order details, item status, "
         "product availability, stock quantities, product and case names, SKUs, "
-        "customers, missing components, and current date/time. Let query_inventory's "
+        "customers, customer email addresses, missing components, and current date/time. "
+        "Requests to show or list emails, including emails from a specific date, "
+        "mean customer email addresses from Sedatech invoices and must use "
+        "query_inventory. Do not refuse these requests for lack of email-system "
+        "access. This lookup retrieves addresses, not email message contents. "
+        "Preserve explicit years and dates verbatim when forwarding the request; "
+        "the inventory agent resolves omitted years using its current date. "
+        "Let query_inventory's "
         "inventory agent select its specialized tool. Questions such as 'what is "
         "the status of order X?', 'how many orders are in production?', and 'is "
         "item X available?' must use query_inventory, never analyze_data. "
