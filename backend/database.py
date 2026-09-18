@@ -5,6 +5,8 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
+from prompts import TICKET_REPLY_PROMPT_VERSION
+
 
 DATABASE_PATH = Path(
     os.getenv("CACHE_DATABASE_PATH", Path(__file__).with_name("cache.db"))
@@ -57,6 +59,7 @@ def initialize_database() -> None:
                 ticket_id TEXT NOT NULL,
                 based_on_message_id TEXT NOT NULL,
                 response_json TEXT NOT NULL,
+                prompt_version TEXT NOT NULL DEFAULT '',
                 created_at TEXT NOT NULL,
                 PRIMARY KEY (ticket_id, based_on_message_id)
             );
@@ -69,6 +72,14 @@ def initialize_database() -> None:
         if "visible" not in columns:
             connection.execute(
                 "ALTER TABLE messages ADD COLUMN visible INTEGER NOT NULL DEFAULT 1"
+            )
+        draft_columns = {
+            row["name"]
+            for row in connection.execute("PRAGMA table_info(drafts)").fetchall()
+        }
+        if "prompt_version" not in draft_columns:
+            connection.execute(
+                "ALTER TABLE drafts ADD COLUMN prompt_version TEXT NOT NULL DEFAULT ''"
             )
 
 
@@ -173,28 +184,30 @@ def store_ticket_messages(
         )
 
 
-def get_cached_draft(ticket_id: str, last_message_id: str) -> dict | None:
+def get_cached_draft(ticket_id: str, last_message_id: str) -> dict | str | None:
     with _connection() as connection:
         row = connection.execute(
             """
             SELECT response_json FROM drafts
             WHERE ticket_id = ? AND based_on_message_id = ?
+                AND prompt_version = ?
             """,
-            (ticket_id, last_message_id),
+            (ticket_id, last_message_id, TICKET_REPLY_PROMPT_VERSION),
         ).fetchone()
     return json.loads(row["response_json"]) if row else None
 
 
-def store_draft(ticket_id: str, last_message_id: str, response: dict) -> None:
+def store_draft(ticket_id: str, last_message_id: str, response: dict | str) -> None:
     with _connection() as connection:
         connection.execute(
             """
             INSERT INTO drafts (
-                ticket_id, based_on_message_id, response_json, created_at
-            ) VALUES (?, ?, ?, ?)
+                ticket_id, based_on_message_id, response_json, created_at, prompt_version
+            ) VALUES (?, ?, ?, ?, ?)
             ON CONFLICT(ticket_id, based_on_message_id) DO UPDATE SET
                 response_json = excluded.response_json,
-                created_at = excluded.created_at
+                created_at = excluded.created_at,
+                prompt_version = excluded.prompt_version
             """,
-            (ticket_id, last_message_id, json.dumps(response), _now()),
+            (ticket_id, last_message_id, json.dumps(response), _now(), TICKET_REPLY_PROMPT_VERSION),
         )

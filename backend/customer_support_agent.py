@@ -27,6 +27,7 @@ from langchain_experimental.tools.python.tool import PythonAstREPLTool
 from pydantic import BaseModel, Field
 
 from llm_requests import Conversation, model_settings
+from prompts import prompt as ticket_reply_instructions
 
 
 logger = logging.getLogger(__name__)
@@ -475,22 +476,7 @@ def analyze_data(
         }
 
 
-customer_support_agent = create_agent(
-    model=model,
-    tools=[
-        query_inventory,
-        analyze_data,
-        search_customer_kb,
-        run_python_calculation,
-    ],
-    middleware=[
-        # A small local model can repeat a successful or failed tool call instead
-        # of converting its result into a final answer. End the run cleanly before
-        # that becomes an unbounded LangGraph model/tool cycle.
-        ToolCallLimitMiddleware(run_limit=4, exit_behavior="end"),
-        ModelCallLimitMiddleware(run_limit=5, exit_behavior="end"),
-    ],
-    system_prompt=(
+SUPPORT_AGENT_SYSTEM_PROMPT = (
         "You are an enterprise customer-service assistant. "
         f"Today's date is {date.today().isoformat()}. For a date range ending "
         "today, omit analyze_data's date_to argument so current records are not "
@@ -541,8 +527,34 @@ customer_support_agent = create_agent(
         "in the response so database diagnostics are not hidden. When its chart "
         "field is present, tell the user the chart is displayed below; never say "
         "that you cannot generate the graph or ask the user to draw it manually."
-    ),
-    checkpointer=InMemorySaver(),
+)
+
+
+def _build_support_agent(system_prompt: str):
+    return create_agent(
+        model=model,
+        tools=[
+            query_inventory,
+            analyze_data,
+            search_customer_kb,
+            run_python_calculation,
+        ],
+        middleware=[
+            # Bound repeated model/tool calls for each independently built agent.
+            ToolCallLimitMiddleware(run_limit=4, exit_behavior="end"),
+            ModelCallLimitMiddleware(run_limit=5, exit_behavior="end"),
+        ],
+        system_prompt=system_prompt,
+        checkpointer=InMemorySaver(),
+    )
+
+
+customer_support_agent = _build_support_agent(SUPPORT_AGENT_SYSTEM_PROMPT)
+
+# Only the FastAPI ticket generation and revision paths use this agent.
+# Separate checkpoints keep its instructions/history out of the general chat.
+ticket_reply_agent = _build_support_agent(
+    SUPPORT_AGENT_SYSTEM_PROMPT + "\n\n" + ticket_reply_instructions
 )
 
 
@@ -563,9 +575,18 @@ def generate_ticket_reply(
     if not langchain_messages:
         raise ValueError("Ticket has no visible messages")
 
+    langchain_messages.append({
+        "role": "user",
+        "content": (
+            "Draft a customer-facing ticket reply to the latest customer message "
+            "in the conversation above. Write only the reply, entirely in French, "
+            "following the ticket reply rules."
+        ),
+    })
+
     # Each ticket revision gets an isolated checkpoint. This lets us submit the
     # complete eDesk history without duplicating it when the endpoint is retried.
-    result = customer_support_agent.invoke(
+    result = ticket_reply_agent.invoke(
         {"messages": langchain_messages},
         {
             "configurable": {
