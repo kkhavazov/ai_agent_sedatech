@@ -228,7 +228,10 @@ def query_inventory(request: str) -> dict:
     """Use the inventory agent for order status, order lifecycle, order counts,
     individual order details, item status, product availability, stock quantities,
     SKUs, cases, customers, customer email addresses from Sedatech invoices,
-    missing components, or the current Berlin date/time.
+    missing components, future component ordering forecasts, or the current
+    Berlin date/time. 'What are we missing?' and 'what do we need?' mean current
+    missing components. Use forecasts only for explicit predictions/forecasts
+    or future ordering needs such as 'what do we need to order next week?'.
     Requests such as 'show me emails from 10th of September 2026' are customer
     email-address lookups and must use this tool, including date-filtered requests.
     The inventory agent selects the appropriate specialized inventory tool. Pass
@@ -499,7 +502,14 @@ customer_support_agent = create_agent(
         "query_inventory for every operational inventory request: order status or "
         "lifecycle, simple order counts, individual order details, item status, "
         "product availability, stock quantities, product and case names, SKUs, "
-        "customers, customer email addresses, missing components, and current date/time. "
+        "customers, customer email addresses, missing components, future component "
+        "ordering forecasts, and current date/time. "
+        "Questions such as 'what are we missing?', 'what do we need?', or 'what "
+        "do we need to order?' mean current missing components unless the user "
+        "specifies a future period or explicitly asks for a prediction/forecast. "
+        "Future ordering questions such as 'what do we need to order next week?' "
+        "also use query_inventory for forecasting. Do not reinterpret current "
+        "shortage questions as forecasts. "
         "Requests to show or list emails, including emails from a specific date, "
         "mean customer email addresses from Sedatech invoices and must use "
         "query_inventory. Do not refuse these requests for lack of email-system "

@@ -112,6 +112,32 @@ DATE INTERPRETATION
   Use an open-ended start date only for wording such as "since" or "onwards".
 - State the resolved date, including the year, when answering dated requests.
 
+CURRENT SHORTAGES AND FUTURE ORDERING
+
+- By default, "what are we missing?", "what components are missing?",
+  "what do we need?", and "what do we need to order?" ask for components
+  currently missing from existing orders. No future period is implied.
+  Call find_missing_components_for_open_orders when no exact order number
+  is given, even if the user does not explicitly mention open orders.
+- For current shortages or requirements of one exact order, call
+  find_missing_components with that order_number.
+- Use forecast_components only when the user explicitly asks to predict or
+  forecast inventory needs, or asks what to order for a future period.
+  Examples: "what do we need to order next week?", "what will we need in the
+  next 4 weeks?", and "forecast component demand". Future needs use forecasting
+  even if the user uses words such as "missing" or "need".
+  Preserve the requested number of weeks; for an explicit forecast without
+  a horizon, use the tool's default of 1 week and state that period.
+- Do not turn a general current-needs question into a forecast or ask for a
+  forecast horizon. If current shortage data is unavailable, report that;
+  do not substitute forecast results. An empty shortage result means no
+  missing components were found for the checked orders.
+- For current shortages, list the returned component IDs and missing
+  quantities, with affected orders where useful. For forecasts, clearly label
+  the future period and suggested order quantities as estimates.
+- If both current shortages and future ordering are requested, use both tools
+  and present their results separately. Do not add their quantities together.
+
 TOOL SELECTION
 
 - Use get_current_time when the current time is required.
@@ -130,8 +156,8 @@ TOOL SELECTION
 - When filter_orders returns one or more orders, use the returned data to
   answer the request.
 - Use search_item when the amount and of an inventory item is required
-- Use forecast_components when asked which components should be ordered for
-  upcoming weeks or when asked for an inventory replenishment forecast.
+- Use forecast_components only for explicit predictions, forecasts, or future
+  ordering needs, following CURRENT SHORTAGES AND FUTURE ORDERING above.
 - In forecast_components results, forecast_demand is estimated total component
   usage across all requested weeks. It is not inventory on hand.
   suggested_order_quantity is the quantity that should be ordered after current
@@ -140,7 +166,8 @@ TOOL SELECTION
 - Use find_missing_components when checking one exact order for currently
   missing components.
 - Use find_missing_components_for_open_orders when checking all currently
-  open orders for missing components.
+  open orders for missing components, including general "what do we need?"
+  or "what are we missing?" questions without a future period.
 - When the user requests items for the latest order and no exact order
   number is given, first call filter_orders with limit=1. Then call
   get_order using the returned order_number to retrieve the item list.

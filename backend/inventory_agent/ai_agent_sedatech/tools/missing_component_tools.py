@@ -34,8 +34,10 @@ def build_find_missing_components_tool(
     return ToolDefinition(
         name="find_missing_components",
         description=(
-            "Check whether one exact order is currently missing any required "
-            "components. Use this when the employee provides an order number."
+            "Return components and quantities currently missing for one exact "
+            "order. Use for 'what is missing for order X?' or 'what do we need "
+            "for order X?' when an order number is given. For predicted future "
+            "inventory needs, use forecast_components."
         ),
         arguments_model=FindMissingComponentsArguments,
         handler=find_missing_components,
@@ -60,8 +62,13 @@ def build_find_open_order_missing_components_tool(
     return ToolDefinition(
         name="find_missing_components_for_open_orders",
         description=(
-            "Find missing components across all orders that are currently open. "
-            "Use this for fleet-wide questions without a specific order number."
+            "Return components and quantities currently missing across all open "
+            "orders. Default tool for 'what are we missing?', 'what components "
+            "are missing?', 'what do we need?', or 'what do we need to order?' "
+            "without a specific order number or future period. The user does "
+            "not need to mention open orders. For one exact order, use "
+            "find_missing_components. Use forecast_components only for explicit "
+            "predictions, forecasts, or future ordering needs."
         ),
         arguments_model=FindOpenOrderMissingComponentsArguments,
         handler=find_open_order_missing_components,

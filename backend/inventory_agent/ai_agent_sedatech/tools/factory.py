@@ -123,7 +123,14 @@ def build_tool_registry(
                 name="forecast_components",
                 description=(
                     "Forecast which PC components should be ordered for the "
-                    "requested number of upcoming weeks. Returns only components "
+                    "requested number of upcoming weeks. Use only for explicit "
+                    "predictions, forecasts, or future ordering questions such as "
+                    "'what do we need to order next week?'. For 'what are we "
+                    "missing?', 'what do we need?', or 'what do we need to order?' "
+                    "without a future period, use "
+                    "find_missing_components_for_open_orders (or "
+                    "find_missing_components for one exact order). "
+                    "Returns only components "
                     "whose forecast demand exceeds current and incoming stock; "
                     "forecast_demand is the estimated total usage over the entire "
                     "requested period, not current stock. "

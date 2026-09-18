@@ -1,6 +1,6 @@
 Model configuration is defined in `inventory_agent/ai_agent_sedatech/model_settings.py`
 and shared by the support agent, conversation/summarization client, inventory
-agent, and Gemini reprompt client. The module lives in the inventory project so
+agent, and optional inventory Gemini client. The module lives in the inventory project so
 its standalone CLI can also load it.
 
 Merge the settings from `.env.example` into `backend/.env`; preserve your existing
@@ -30,9 +30,10 @@ embedding context, and timeout must be positive. `OLLAMA_KEEP_ALIVE` is an Ollam
 duration such as `30m` or `0` to unload after requests. Routine chat now uses
 consistent temperature and thinking settings, including summarization.
 
-Gemini credentials are optional for local operation. The existing reprompt
-feature still uses Gemini, with `GEMINI_MODEL` and `GEMINI_API_KEY` from these
-settings (the Google SDK's credential fallback remains available).
+Gemini credentials are optional for local operation. Reprompting uses the support
+agent and its configured Ollama model, with a separate conversation for each
+revision request. Inventory Gemini/hybrid routing uses `GEMINI_MODEL` and
+`GEMINI_API_KEY` from these settings.
 
 Keep the embedding model aligned with the model used to build the Qdrant
 collection; changing it requires rebuilding the corresponding embeddings.
