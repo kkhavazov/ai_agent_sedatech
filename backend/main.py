@@ -5,7 +5,7 @@ import httpx
 import asyncio
 from pydantic import BaseModel
 import os
-from llm_requests import reprompt_call
+from llm_requests import TranslationError, reprompt_call, translate_ticket_messages
 from customer_support_agent import generate_ticket_reply
 from database import (
     get_cached_draft,
@@ -176,9 +176,16 @@ async def get_processed_ticket(ticket_id: str):
             client, ticket_id, raw_ticket
         )
 
+    try:
+        translated_messages = await asyncio.to_thread(
+            translate_ticket_messages, formatted_messages
+        )
+    except TranslationError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
     return {
         "ticket_id": ticket_id,
-        "messages": formatted_messages,
+        "messages": translated_messages,
         "last_message_id": last_message_id,
         "cache_hit": cache_hit,
     }

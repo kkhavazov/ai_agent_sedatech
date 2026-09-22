@@ -35,6 +35,13 @@ agent and its configured Ollama model, with a separate conversation for each
 revision request. Inventory Gemini/hybrid routing uses `GEMINI_MODEL` and
 `GEMINI_API_KEY` from these settings.
 
+`GET /tickets/{ticket_id}` translates message text into French with direct Ollama
+chat calls using `OLLAMA_MODEL`, without invoking an agent or tools. Translation
+disables thinking and sets temperature to zero; other model settings still apply.
+Original messages remain in the database. Up to 256 successful translations are
+cached in memory per backend process and cleared on restart. Empty messages are
+preserved; failed, empty, or output-limited translations return HTTP 502.
+
 Keep the embedding model aligned with the model used to build the Qdrant
 collection; changing it requires rebuilding the corresponding embeddings.
 Existing cached drafts are not invalidated by a model change.
