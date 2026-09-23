@@ -210,7 +210,7 @@ class SqlServerOrderRepository:
         where_sql = ""
 
         if where_clauses:
-            where_sql = "WHERE " + "Adressnummer <> 'K10000' AND Adressnummer <> 'DE00000' AND Adressnummer <> 'K000000' AND Vorlage = '' AND " + " AND ".join(where_clauses)
+            where_sql = "WHERE " + "Vertreter NOT IN ('23', '0', '28') AND PLZ != '10997' AND Vertrag NOT IN (-1) AND Lager = 100 AND " + " AND ".join(where_clauses)
 
         query = f"""
             SELECT TOP {safe_limit}
@@ -317,7 +317,7 @@ class SqlServerOrderRepository:
 
         where_clause = ""
         if conditions:
-            where_clause = "WHERE " + "Adressnummer <> 'K10000' AND Adressnummer <> 'DE00000' AND Adressnummer <> 'K000000' AND Vorlage = '' AND " + " AND ".join(conditions)
+            where_clause = "WHERE " + "Vertreter NOT IN ('23', '0', '28') AND PLZ != '10997' AND Vertrag NOT IN (-1) AND Lager = 100 AND " + " AND ".join(conditions)
 
         query = f"""
             SELECT COUNT(*) AS OrderCount
@@ -462,7 +462,7 @@ class SqlServerOrderRepository:
         safe_max_rows = max(1, min(max_rows, 10000))
         conditions: list[str] = [
             't1.Netto != 0',
-            "t1.Vertreter NOT IN ('23', '0', '28')"
+            "t1.Vertreter NOT IN ('23', '0', '28') AND t1.PLZ != '10997' AND t1.Vertrag NOT IN (-1) AND t1.Lager = 100"
         ]
         parameters: list[Any] = []
 

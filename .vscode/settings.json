@@ -1,0 +1,9 @@
+{
+  "files.exclude": {
+    "**/.pytest_cache": true,
+    "**/pytest-cache-files*": true,
+    "**/__pycache__": true,
+    "**/test_*.py": true,
+    "**/*_test.py": true
+  }
+}
