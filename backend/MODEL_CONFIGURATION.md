@@ -38,9 +38,21 @@ revision request. Inventory Gemini/hybrid routing uses `GEMINI_MODEL` and
 `GET /tickets/{ticket_id}` translates message text into French with direct Ollama
 chat calls using `OLLAMA_MODEL`, without invoking an agent or tools. Translation
 disables thinking and sets temperature to zero; other model settings still apply.
-Original messages remain in the database. Up to 256 successful translations are
-cached in memory per backend process and cleared on restart. Empty messages are
-preserved; failed, empty, or output-limited translations return HTTP 502.
+Original messages remain in the database. Successful translations are stored in
+the same SQLite database (`CACHE_DATABASE_PATH`) as ticket messages and drafts.
+The existing `fastapi_cache` Docker volume preserves them across backend restarts
+and container rebuilds. The translation table is created automatically on startup
+without clearing existing data. Messages translated before this persistent cache
+was added need to be translated once more to populate it.
+
+Translations are reused for identical source text, translation instructions, and
+effective model/generation settings. Changing these causes a new translation;
+changing only the timeout or keep-alive does not. Empty messages are preserved;
+failed, empty, or output-limited translations return HTTP 502 and are not cached.
+
+From the repository root, `docker compose up -d --build fastapi` applies backend
+changes while preserving this cache. Keep the same Compose project name and
+avoid `docker compose down -v`, which deletes the cache volume.
 
 Keep the embedding model aligned with the model used to build the Qdrant
 collection; changing it requires rebuilding the corresponding embeddings.

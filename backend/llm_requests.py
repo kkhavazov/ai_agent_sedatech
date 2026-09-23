@@ -1,5 +1,6 @@
+import json
 import os
-from functools import lru_cache
+from hashlib import sha256
 from uuid import uuid4
 
 import httpx
@@ -7,6 +8,7 @@ from ollama import Client, ResponseError
 from qdrant_client import QdrantClient
 from qdrant_client.models import Filter, FieldCondition, MatchValue
 from inventory_agent.ai_agent_sedatech.model_settings import ModelSettings
+from database import get_cached_translation, store_translation
 
 
 model_settings = ModelSettings()
@@ -46,15 +48,31 @@ class TranslationError(RuntimeError):
     """Ollama could not produce a complete ticket-message translation."""
 
 
-@lru_cache(maxsize=256)
 def translate_to_french(text: str) -> str:
-    """Translate one message directly with Ollama; cache successful translations."""
+    """Translate with Ollama and persist successful translations across restarts."""
     if not text.strip():
         return text
 
     settings = model_settings.chat_kwargs()
     settings["think"] = False
     settings["options"]["temperature"] = 0
+    # Include the exact input and effective generation settings so changed
+    # messages, prompts, or models never reuse an unrelated translation.
+    cache_key = sha256(json.dumps(
+        {
+            "text": text,
+            "instructions": TRANSLATION_INSTRUCTIONS,
+            "model": settings["model"],
+            "think": settings["think"],
+            "options": settings["options"],
+        },
+        sort_keys=True,
+        ensure_ascii=False,
+    ).encode("utf-8")).hexdigest()
+    cached = get_cached_translation(cache_key)
+    if cached is not None:
+        return cached
+
     try:
         response = ollama_client.chat(
             **settings,
@@ -72,6 +90,7 @@ def translate_to_french(text: str) -> str:
     translated = response["message"]["content"]
     if not translated or not translated.strip():
         raise TranslationError("Ollama returned an empty ticket-message translation.")
+    store_translation(cache_key, translated)
     return translated
 
 

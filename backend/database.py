@@ -63,6 +63,12 @@ def initialize_database() -> None:
                 created_at TEXT NOT NULL,
                 PRIMARY KEY (ticket_id, based_on_message_id)
             );
+
+            CREATE TABLE IF NOT EXISTS translations (
+                cache_key TEXT PRIMARY KEY,
+                translated_text TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
             """
         )
         columns = {
@@ -210,4 +216,27 @@ def store_draft(ticket_id: str, last_message_id: str, response: dict | str) -> N
                 prompt_version = excluded.prompt_version
             """,
             (ticket_id, last_message_id, json.dumps(response), _now(), TICKET_REPLY_PROMPT_VERSION),
+        )
+
+
+def get_cached_translation(cache_key: str) -> str | None:
+    with _connection() as connection:
+        row = connection.execute(
+            "SELECT translated_text FROM translations WHERE cache_key = ?",
+            (cache_key,),
+        ).fetchone()
+    return row["translated_text"] if row else None
+
+
+def store_translation(cache_key: str, translated_text: str) -> None:
+    with _connection() as connection:
+        connection.execute(
+            """
+            INSERT INTO translations (cache_key, translated_text, created_at)
+            VALUES (?, ?, ?)
+            ON CONFLICT(cache_key) DO UPDATE SET
+                translated_text = excluded.translated_text,
+                created_at = excluded.created_at
+            """,
+            (cache_key, translated_text, _now()),
         )
