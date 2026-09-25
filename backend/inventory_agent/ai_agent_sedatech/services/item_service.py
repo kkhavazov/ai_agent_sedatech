@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import sqlite3
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 from zoneinfo import ZoneInfo
 
 from models.item import ComponentForecast, ItemsSearchResponse
-from repositories.item_repository import ItemRepository
+from repositories.item_repository import ItemRepository, normalize_skus
 
 class ItemNotFoundError(LookupError):
     pass
@@ -191,6 +191,54 @@ class ItemService:
                 for item in forecast
             ],
         )
+
+    def search_items_skus(self, list_of_skus: list[str]) -> dict[str, int]:
+        skus = normalize_skus(list_of_skus)
+        if not skus:
+            return {}
+        return self.repository.search_items_skus(skus)
+
+    def analyse_items_used(
+        self,
+        *,
+        date_from: date,
+        date_to: date,
+        group_by: Literal["day", "week", "month", "year", "total"] = "month",
+        **filters: Any,
+    ) -> list[dict[str, Any]]:
+        if date_from is None or date_to is None:
+            raise ValueError("date_from and date_to are required")
+        if date_from > date_to:
+            raise ValueError("date_from cannot be later than date_to")
+        if group_by not in {"day", "week", "month", "year", "total"}:
+            raise ValueError("group_by must be day, week, month, year, or total")
+        if not any(value is not None and value != "" for value in filters.values()):
+            raise ValueError("At least one item filter must be provided")
+        frame = self.repository.analyse_items_used(
+            date_from=date_from, date_to=date_to, **filters,
+        )
+        totals: dict[tuple[str, str, str | None], float] = {}
+        for record in frame.to_dict(orient="records"):
+            sold_on = record["Dates"]
+            if isinstance(sold_on, datetime):
+                sold_on = sold_on.date()
+            elif isinstance(sold_on, str):
+                sold_on = date.fromisoformat(sold_on)
+            if group_by == "week":
+                sold_on -= timedelta(days=sold_on.weekday())
+            elif group_by == "month":
+                sold_on = sold_on.replace(day=1)
+            elif group_by == "year":
+                sold_on = sold_on.replace(month=1, day=1)
+            period = None if group_by == "total" else sold_on.isoformat()
+            key = (str(record["SKU"]), str(record["Name"]), period)
+            totals[key] = totals.get(key, 0.0) + float(record["SoldAmount"] or 0)
+        return [
+            {"sku": sku, "name": name, "period": period, "sold_amount": amount}
+            for (sku, name, period), amount in sorted(
+                totals.items(), key=lambda entry: (entry[0][2] or "", entry[0][0], entry[0][1]),
+            )
+        ]
 
     def forecast_components(
         self,

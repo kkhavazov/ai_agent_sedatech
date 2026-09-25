@@ -229,7 +229,8 @@ def query_inventory(request: str) -> dict:
     """Use the inventory agent for order status, order lifecycle, order counts,
     individual order details, item status, product availability, stock quantities,
     SKUs, cases, customers, customer email addresses from Sedatech invoices,
-    missing components, future component ordering forecasts, or the current
+    missing components, component sales/usage tables and graphs over time,
+    future component ordering forecasts, or the current
     Berlin date/time. 'What are we missing?' and 'what do we need?' mean current
     missing components. Use forecasts only for explicit predictions/forecasts
     or future ordering needs such as 'what do we need to order next week?'.
@@ -238,7 +239,8 @@ def query_inventory(request: str) -> dict:
     The inventory agent selects the appropriate specialized inventory tool. Pass
     the user's complete original question unchanged, preserving order numbers,
     product names, model numbers, and SKUs. Do not use analyze_data for
-    these operational lookups.
+    these operational lookups or component sales analysis. Bare SKUs are stock
+    quantity requests; the inventory agent uses search_items_skus for them.
     """
     try:
         inventory_agent = _get_inventory_agent()
@@ -261,13 +263,25 @@ def query_inventory(request: str) -> dict:
             },
         }
 
-    return {
+    response = {
         "answer": result.draft,
         "model": result.model_name,
         "tool_calls": result.tool_calls,
         "tool_results": result.tool_results,
         "warnings": result.warnings,
     }
+    # Preserve structured component charts across the inventory-agent boundary
+    # so Streamlit can render them instead of relying on the model's prose.
+    for tool_result in reversed(result.tool_results):
+        if (
+            tool_result.get("tool") == "analyse_items_used"
+            and tool_result.get("success")
+        ):
+            chart = (tool_result.get("data") or {}).get("chart")
+            if chart and chart.get("data"):
+                response["chart"] = chart
+                break
+    return response
 
 
 def _infer_analysis_lifecycle(request: str) -> str | None:
@@ -482,14 +496,21 @@ SUPPORT_AGENT_SYSTEM_PROMPT = (
         "today, omit analyze_data's date_to argument so current records are not "
         "excluded by an inferred cutoff. "
         "Use search_customer_kb for policies, troubleshooting, and precedent "
-        "tickets. Tool routing is strict. Use analyze_data only for aggregate "
-        "analysis is necessary for a chart, revenue calculation, average, trend, "
-        "comparison, or grouped breakdown across multiple order rows. Use "
+        "tickets. Tool routing is strict. Use analyze_data for aggregate order "
+        "metrics such as revenue, order counts, production time, and their trends "
+        "or grouped breakdowns. Use query_inventory for component sales or usage "
+        "quantities over time, including tables and graphs; its inventory agent "
+        "uses analyse_items_used. A component sales graph must use query_inventory. "
+        "Use "
         "query_inventory for every operational inventory request: order status or "
         "lifecycle, simple order counts, individual order details, item status, "
         "product availability, stock quantities, product and case names, SKUs, "
         "customers, customer email addresses, missing components, future component "
         "ordering forecasts, and current date/time. "
+        "A message containing only SKUs, or a request for current stock amounts "
+        "by exact SKU, must use query_inventory so its inventory agent can call "
+        "search_items_skus. Broader stock analysis uses the inventory agent's "
+        "search_item tool, backed by search_inventory. "
         "Questions such as 'what are we missing?', 'what do we need?', or 'what "
         "do we need to order?' mean current missing components unless the user "
         "specifies a future period or explicitly asks for a prediction/forecast. "
@@ -519,13 +540,14 @@ SUPPORT_AGENT_SYSTEM_PROMPT = (
         "is unavailable, report that once and do not call the same tool again. "
         "After receiving sufficient tool output, answer the user immediately. "
         "Never repeat an identical tool call in the same request. "
-        "When the user asks for a graph, chart, plot, or visualization, call "
-        "analyze_data with chart_type set (line for time trends, bar for category "
-        "comparisons). Then say the chart is displayed below; do not replace it "
-        "with a Markdown table. "
+        "For order graphs, call analyze_data with chart_type set (line for time "
+        "trends, bar for category comparisons). For component sales graphs, "
+        "forward the full request to query_inventory, including the requested "
+        "graph and dates. When either tool returns a chart, say it is displayed "
+        "below; do not replace it with a Markdown table. "
         "When analyze_data reports an error, include its exact error.message "
-        "in the response so database diagnostics are not hidden. When its chart "
-        "field is present, tell the user the chart is displayed below; never say "
+        "in the response so database diagnostics are not hidden. When a tool's "
+        "chart field is present, tell the user the chart is displayed below; never say "
         "that you cannot generate the graph or ask the user to draw it manually."
 )
 

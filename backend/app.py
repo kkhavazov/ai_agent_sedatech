@@ -14,10 +14,11 @@ def render_chart(chart: dict | None) -> None:
     # Default to the original 'x' column
     x_col = "x"
     
-    # Parse months and sort chronologically
-    parsed_months = pd.to_datetime(frame["x"], format="%b %Y", errors="coerce")
-    if parsed_months.notna().any():
-        frame["x_date"] = parsed_months
+    # Component charts use ISO periods; existing order charts use month names.
+    date_format = "ISO8601" if chart.get("x_type") == "temporal" else "%b %Y"
+    parsed_dates = pd.to_datetime(frame["x"], format=date_format, errors="coerce")
+    if parsed_dates.notna().all():
+        frame["x_date"] = parsed_dates
         frame = frame.sort_values("x_date")
         # Point to the datetime column so the chart honors the timeline
         x_col = "x_date"
@@ -51,9 +52,6 @@ def extract_analysis_chart(result: dict, prompt: str = "") -> dict | None:
         word in prompt.casefold()
         for word in ("graph", "chart", "plot", "visualization", "visualisation")
     )
-    if not chart_requested:
-        return None
-
     # With a checkpointer, invoke() returns the whole conversation. Only inspect
     # tool messages emitted after the latest user message so a chart from an
     # earlier turn cannot leak into the current response.
@@ -68,7 +66,8 @@ def extract_analysis_chart(result: dict, prompt: str = "") -> dict | None:
     )
     current_turn_messages = messages[latest_user_index + 1:]
     for message in reversed(current_turn_messages):
-        if getattr(message, "name", None) != "analyze_data":
+        tool_name = getattr(message, "name", None)
+        if tool_name not in {"analyze_data", "query_inventory"}:
             continue
         try:
             payload = json.loads(str(message.text))
@@ -76,6 +75,8 @@ def extract_analysis_chart(result: dict, prompt: str = "") -> dict | None:
             continue
         if payload.get("chart"):
             return payload["chart"]
+        if tool_name != "analyze_data":
+            continue
         # Local models occasionally omit chart_type despite an explicit graph
         # request. Build the same native Streamlit chart from aggregate rows.
         rows = payload.get("answer")

@@ -1,16 +1,19 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Literal
+from datetime import date
+from typing import TYPE_CHECKING, Any, Literal
 
 import pymssql
 
-from repositories.item_repository import ItemRepository
+from repositories.item_repository import ItemRepository, normalize_skus
 
 from models.item import ComponentForecast, ItemsSearchResponse
 
 from tools.items.case_inventory import case_inventory as case_inventory
 
+if TYPE_CHECKING:
+    import pandas as pd
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +81,7 @@ class SqlServerItemRepository(ItemRepository):
         parameters: list[Any] = []
 
         for value, column in (
-            (sku, "SERIE.Artikelnummer"),
+            (sku, "ART.Artikelnummer"),
             (category, "ART.ArtikelGruppe"),
             (item_name, "ART.Bezeichnung"),
         ):
@@ -250,6 +253,27 @@ class SqlServerItemRepository(ItemRepository):
                 AND Orders.Bezeichnung = Stock.Bezeichnung
 
                 ORDER BY Stock.Bezeichnung
+        """
+    def _build_analyze_components(self, filters: list[str]) -> str:
+        where_sql = "WHERE " + " AND ".join(
+            [
+                "BELEGP.Belegtyp = 'R'",
+                "ART.Artikelgruppe IN ('TW', 'GC', 'CP', 'NW', 'ME', 'HD', 'MB', 'PS', 'FA', 'OP')",
+                *filters,
+            ]
+        )
+        return f"""
+        SELECT
+            ART.Artikelnummer AS SKU,
+            ART.Bezeichnung AS Name,
+            SUM(BELEGP.Menge) AS SoldAmount,
+            CAST(BELEGP.Datum AS date) AS Dates
+        FROM dbo.BELEGP
+        INNER JOIN dbo.ART
+            ON BELEGP.Artikelnummer = ART.Artikelnummer
+        {where_sql}
+        GROUP BY ART.Artikelnummer, ART.Bezeichnung, CAST(BELEGP.Datum AS date)
+        ORDER BY Dates, SKU
         """
 
     def search_inventory(
@@ -496,3 +520,128 @@ class SqlServerItemRepository(ItemRepository):
                     )
                 )
         return result
+
+    def search_items_skus(
+        self,
+        list_of_skus: list[str],
+    ) -> dict[str, int]:
+        list_of_skus = normalize_skus(list_of_skus)
+        if not list_of_skus:
+            return {}
+        placeholders = ", ".join(["%s"] * len(list_of_skus))
+        query = f"""
+        SELECT
+            ART.Artikelnummer,
+            COALESCE(SUM(LAGERP.Bestand), 0) AS CurrentStock
+        FROM dbo.ART
+        LEFT JOIN dbo.SERIE
+            ON SERIE.Artikelnummer = ART.Artikelnummer
+        LEFT JOIN dbo.LAGERP
+            ON LAGERP.IdSerie = SERIE.Id
+        WHERE ART.Artikelnummer IN ({placeholders})
+        GROUP BY ART.Artikelnummer
+        """
+        connection = None
+        cursor = None
+
+        try:
+            connection = self._connect()
+            cursor = connection.cursor()
+            cursor.execute(query, tuple(list_of_skus))
+            rows = cursor.fetchall() or []
+
+        except pymssql.Error as exc:
+            raise RuntimeError(f"SQL Server query failed: {exc}") from exc
+
+        finally:
+            if cursor is not None:
+                cursor.close()
+
+            if connection is not None:
+                connection.close()
+
+        stock = {
+            str(row["Artikelnummer"]).strip().casefold(): int(row["CurrentStock"] or 0)
+            for row in rows
+        }
+        # Preserve requested spelling even when SQL Server matches case-insensitively.
+        # Known articles without stock return zero; unknown articles are omitted.
+        return {
+            sku: stock[sku.casefold()]
+            for sku in list_of_skus
+            if sku.casefold() in stock
+        }
+
+    def analyse_items_used(
+        self,
+        *,
+        date_from: date | None = None,
+        date_to: date | None = None,
+        sku: str | None = None,
+        category: str | None = None,
+        item_name: str | None = None,
+        ram_capacity: int | None = None,
+        ram_ddr: int | None = None,
+        ram_speed: int | None = None,
+        cpu_manufacturer: Literal["Intel", "AMD"] | None = None,
+        cpu_generation: int | None = None,
+        cpu_model: str | None = None,
+        hdd_capacity: int | None = None,
+        hdd_type: Literal["HDD", "SSD"] | None = None,
+        case_manufacturer: str | None = None,
+        case_model: str | None = None,
+        gpu_manufacturer: Literal["NVIDIA", "AMD"] | None = None,
+        gpu_series: Literal["Geforce", "Radeon", "Quadro", "Nvidia"] | None = None,
+        gpu_model: str | None = None,
+        gpu_vram: int | None = None,
+    ) -> pd.DataFrame:
+        import pandas as pd
+
+        if date_from and date_to and date_from > date_to:
+            raise ValueError("date_from cannot be later than date_to")
+        filters, parameters = self._build_article_filters(
+            sku=sku,
+            category=category,
+            item_name=item_name,
+            ram_capacity=ram_capacity,
+            ram_ddr=ram_ddr,
+            ram_speed=ram_speed,
+            cpu_manufacturer=cpu_manufacturer,
+            cpu_generation=cpu_generation,
+            cpu_model=cpu_model,
+            hdd_capacity=hdd_capacity,
+            hdd_type=hdd_type,
+            case_manufacturer=case_manufacturer,
+            case_model=case_model,
+            gpu_manufacturer=gpu_manufacturer,
+            gpu_series=gpu_series,
+            gpu_model=gpu_model,
+            gpu_vram=gpu_vram,
+        )
+        if date_from is not None:
+            filters.append("BELEGP.Datum >= %s")
+            parameters.append(date_from)
+        if date_to is not None:
+            filters.append("BELEGP.Datum < DATEADD(day, 1, %s)")
+            parameters.append(date_to)
+        query = self._build_analyze_components(filters=filters)
+        connection = None
+        cursor = None
+
+        try:
+            connection = self._connect()
+            cursor = connection.cursor()
+            cursor.execute(query, tuple(parameters))
+            rows = cursor.fetchall() or []
+            return pd.DataFrame.from_records(
+                rows, columns=["SKU", "Name", "SoldAmount", "Dates"],
+            )
+        except pymssql.Error as exc:
+            raise RuntimeError(
+                f"SQL Server component sales query failed: {exc}"
+            ) from exc
+        finally:
+            if cursor is not None:
+                cursor.close()
+            if connection is not None:
+                connection.close()

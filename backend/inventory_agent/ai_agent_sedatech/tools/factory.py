@@ -18,6 +18,14 @@ from tools.items.search_item import (
     SearchItemsArguments,
     create_search_items_handler,
 )
+from tools.items.search_items_skus import (
+    SearchItemsSkusArguments,
+    create_search_items_skus_handler,
+)
+from tools.items.analyse_items_used import (
+    AnalyseItemsUsedArguments,
+    create_analyse_items_used_handler,
+)
 from tools.items.forecast_components import (
     ForecastComponentsArguments,
     create_forecast_components_handler,
@@ -112,10 +120,47 @@ def build_tool_registry(
                     "Return each available article matching the filters, grouped "
                     "by article number and name, with its SKU, inventory amount, "
                     "ordered amount, and price statistics. "
+                    "Use for broader inventory analysis, partial SKU searches, "
+                    "and component filters. For stock quantities of exact SKUs "
+                    "only, use search_items_skus. For historical component "
+                    "sales over time, use analyse_items_used. "
                     "The ordered field means: " + ORDERED_AMOUNT_DESCRIPTION
                 ),
                 arguments_model=SearchItemsArguments,
                 handler=create_search_items_handler(item_service),
+            )
+        )
+        registry.register(
+            ToolDefinition(
+                name="search_items_skus",
+                description=(
+                    "Return current stock quantities for a list of exact item "
+                    "SKUs. Use when only SKU-based stock amounts are requested "
+                    "or the user provides bare SKUs without another request. "
+                    "Known SKUs with zero stock are included in stock; unknown "
+                    "SKUs are listed separately in missing_skus. For broader "
+                    "inventory analysis, item attributes, or price statistics, "
+                    "use search_item."
+                ),
+                arguments_model=SearchItemsSkusArguments,
+                handler=create_search_items_skus_handler(item_service),
+            )
+        )
+        registry.register(
+            ToolDefinition(
+                name="analyse_items_used",
+                description=(
+                    "Return quantities sold for specific components, grouped by "
+                    "SKU and day, week, month, year, or the full requested period. "
+                    "Use for historical component sales tables and graph data. "
+                    "Set chart_type to line or bar when a graph is requested. "
+                    "Requires an inclusive invoice-date range and at least one "
+                    "component filter. sold_amount sums invoice (R) line quantities; "
+                    "it is not revenue or production stock usage. Empty rows mean "
+                    "no matching recorded sales."
+                ),
+                arguments_model=AnalyseItemsUsedArguments,
+                handler=create_analyse_items_used_handler(item_service),
             )
         )
         registry.register(

@@ -1,10 +1,14 @@
 from __future__ import annotations
 
-from typing import Literal
+from datetime import date
+from typing import TYPE_CHECKING, Any, Literal
 
 from models.order import OrderItem
 from models.item import ComponentForecast, ItemsSearchResponse
-from repositories.item_repository import ItemRepository
+from repositories.item_repository import ItemRepository, normalize_skus
+
+if TYPE_CHECKING:
+    import pandas as pd
 
 
 class DemoItemRepository(ItemRepository):
@@ -90,6 +94,26 @@ class DemoItemRepository(ItemRepository):
             )
             for item in items
         ]
+
+    def search_items_skus(self, list_of_skus: list[str]) -> dict[str, int]:
+        stock = {item.sku.casefold(): item.quantity for item in self._items}
+        return {
+            sku: stock[sku.casefold()]
+            for sku in normalize_skus(list_of_skus)
+            if sku.casefold() in stock
+        }
+
+    def analyse_items_used(
+        self,
+        *,
+        date_from: date | None = None,
+        date_to: date | None = None,
+        **filters: Any,
+    ) -> pd.DataFrame:
+        import pandas as pd
+
+        # Demo stock has no sales history; do not invent sales from inventory.
+        return pd.DataFrame(columns=["SKU", "Name", "SoldAmount", "Dates"])
 
     def get_components_forecast(
         self,
