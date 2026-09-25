@@ -133,7 +133,7 @@ def test_sales_analysis_builds_graph_without_dropping_rows() -> None:
     assert result["chart"]["type"] == "line"
     assert result["chart"]["x_type"] == "temporal"
     assert len(result["chart"]["data"]) == 125
-    assert result["chart"]["data"][-1] == {"x": "2026-01-01", "y": 124, "series": "ME00124"}
+    assert result["chart"]["data"][-1] == {"x": "2026-01-01", "y": 124, "series": "ME00124 - RAM"}
     json.dumps(result)
 
 
@@ -146,8 +146,8 @@ def test_sales_totals_use_skus_as_chart_categories() -> None:
     )
 
     assert result["chart"]["x_type"] == "category"
-    assert result["chart"]["x_label"] == "SKU"
-    assert result["chart"]["data"] == [{"x": "1234", "y": 12, "series": "1234"}]
+    assert result["chart"]["x_label"] == "SKU / Article name"
+    assert result["chart"]["data"] == [{"x": "1234 - RAM", "y": 12, "series": "1234 - RAM"}]
 
 
 def test_factory_registers_both_tools_with_item_service_and_preserves_inventory_search() -> None:

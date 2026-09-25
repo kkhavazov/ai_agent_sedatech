@@ -531,7 +531,7 @@ class SqlServerItemRepository(ItemRepository):
         placeholders = ", ".join(["%s"] * len(list_of_skus))
         query = f"""
         SELECT
-            ART.Artikelnummer,
+            ART.Artikelnummer, ART.Bezeichnung,
             COALESCE(SUM(LAGERP.Bestand), 0) AS CurrentStock
         FROM dbo.ART
         LEFT JOIN dbo.SERIE
@@ -539,7 +539,7 @@ class SqlServerItemRepository(ItemRepository):
         LEFT JOIN dbo.LAGERP
             ON LAGERP.IdSerie = SERIE.Id
         WHERE ART.Artikelnummer IN ({placeholders})
-        GROUP BY ART.Artikelnummer
+        GROUP BY ART.Artikelnummer, ART.Bezeichnung
         """
         connection = None
         cursor = None

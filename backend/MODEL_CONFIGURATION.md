@@ -23,7 +23,7 @@ To use the larger model, install it on the Ollama host and set:
 OLLAMA_MODEL=qwen3.6:35b
 ```
 
-The default remains `qwen3.5:9b`. The default server is now consistently
+The default remains `qwen3.6:35b`. The default server is now consistently
 `http://localhost:11434`; set `OLLAMA_BASE_URL` explicitly for a remote host.
 `OLLAMA_THINK` accepts true/false, yes/no, or 1/0. Context, output token limit,
 embedding context, and timeout must be positive. `OLLAMA_KEEP_ALIVE` is an Ollama

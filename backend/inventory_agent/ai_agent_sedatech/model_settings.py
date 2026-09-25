@@ -39,7 +39,7 @@ def _boolean(raw: str) -> bool:
 @dataclass(frozen=True, slots=True)
 class ModelSettings:
     ollama_base_url: str = _env("OLLAMA_BASE_URL", "http://localhost:11434")
-    ollama_model: str = _env("OLLAMA_MODEL", "qwen3.5:9b")
+    ollama_model: str = _env("OLLAMA_MODEL", "qwen3.6:35b")
     ollama_timeout_seconds: int = _env("OLLAMA_TIMEOUT_SECONDS", 120, int)
     ollama_num_ctx: int = _env("OLLAMA_NUM_CTX", 16384, int)
     ollama_num_predict: int = _env("OLLAMA_NUM_PREDICT", 2048, int)

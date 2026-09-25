@@ -83,14 +83,14 @@ def create_analyse_items_used_handler(item_service: ItemService):
                     f"Component sales ({args.date_from.isoformat()} to "
                     f"{args.date_to.isoformat()})"
                 ),
-                "x_label": "SKU" if total else "Period",
+                "x_label": "SKU / Article name" if total else "Period",
                 "y_label": "Units sold",
                 "x_type": "category" if total else "temporal",
                 "data": [
                     {
-                        "x": row["sku"] if total else row["period"],
+                        "x": f'{row["sku"]} - {row["name"]}' if total else row["period"],
                         "y": row["sold_amount"],
-                        "series": row["sku"],
+                        "series": f'{row["sku"]} - {row["name"]}',
                     }
                     for row in rows
                 ],

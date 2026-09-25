@@ -169,6 +169,7 @@ TOOL SELECTION
   Always state the resolved date range and grouping in the answer. sold_amount
   sums invoice (R) line quantities; it is not revenue, current stock, or units
   removed during production. Empty rows mean no matching recorded sales.
+  Include both the SKU and article name in sales results and table columns.
   Present returned rows as a table when requested. When a graph is requested,
   set chart_type to line or bar (prefer bar for totals per component). Do not
   claim to have rendered a graph if the tool did not return chart data.
