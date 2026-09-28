@@ -3,6 +3,8 @@ from __future__ import annotations
 from models.item import ORDERED_AMOUNT_DESCRIPTION
 from repositories.sqlserver_emails_repository import SqlServerEmailsRepository
 from tools.email_tools import build_get_emails_tool
+from repositories.sqlserver_items_compatability_repository import SqlServerItemsCompatabilityRepository
+from tools.items.items_compatability import build_items_compatability_tool
 from services.order_service import OrderService
 from services.item_service import ItemService
 from services.missing_service import MissingComponentService
@@ -49,8 +51,11 @@ def build_tool_registry(
     item_service: ItemService | None = None,
     missing_component_service: MissingComponentService | None = None,
     emails_repository: SqlServerEmailsRepository | None = None,
+    items_compatability_repository: SqlServerItemsCompatabilityRepository | None = None,
 ) -> ToolRegistry:
     registry = ToolRegistry()
+    if items_compatability_repository is not None:
+        registry.register(build_items_compatability_tool(items_compatability_repository))
     if emails_repository is not None:
         registry.register(build_get_emails_tool(emails_repository))
     registry.register(build_get_order_tool(order_service))

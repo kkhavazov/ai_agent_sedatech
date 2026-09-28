@@ -11,6 +11,7 @@ from repositories.item_repository import ItemRepository
 from repositories.order_repository import OrderRepository
 from repositories.sqlserver_item_repository import SqlServerItemRepository
 from repositories.sqlserver_emails_repository import SqlServerEmailsRepository
+from repositories.sqlserver_items_compatability_repository import SqlServerItemsCompatabilityRepository
 from repositories.sqlserver_missing_repository import SqlServerMissingRepository
 from repositories.sqlserver_order_repository import SqlServerOrderRepository
 from services.item_service import ItemService
@@ -75,8 +76,19 @@ def build_agent(settings: Settings | None = None) -> SupportAgent:
     item_service = ItemService(build_item_repository(settings))
     missing_component_service = None
     emails_repository = None
+    items_compatability_repository = None
     if settings.repository_backend == "sqlserver":
         emails_repository = SqlServerEmailsRepository(
+            server=settings.sqlserver_server,
+            user=settings.sqlserver_user,
+            password=settings.sqlserver_password,
+            database=settings.sqlserver_database,
+            tds_version=settings.sqlserver_tds_version,
+            port=settings.sqlserver_port,
+            login_timeout_seconds=settings.sqlserver_login_timeout_seconds,
+            query_timeout_seconds=settings.sqlserver_query_timeout_seconds,
+        )
+        items_compatability_repository = SqlServerItemsCompatabilityRepository(
             server=settings.sqlserver_server,
             user=settings.sqlserver_user,
             password=settings.sqlserver_password,
@@ -108,6 +120,7 @@ def build_agent(settings: Settings | None = None) -> SupportAgent:
         item_service,
         missing_component_service,
         emails_repository=emails_repository,
+        items_compatability_repository=items_compatability_repository,
     )
 
 
