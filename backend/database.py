@@ -4,6 +4,7 @@ import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Literal
 
 from prompts import TICKET_REPLY_PROMPT_VERSION
 
@@ -29,6 +30,20 @@ def _connection():
         connection.commit()
     finally:
         connection.close()
+
+
+def _read_connection():
+    """Return a raw connection suitable for read-only queries.
+
+    The caller is responsible for closing the returned connection.
+    Used by read helpers so commits do not leak into unrelated functions.
+    """
+    DATABASE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(DATABASE_PATH, timeout=10)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
+    conn.execute("PRAGMA journal_mode = WAL")
+    return conn
 
 
 def initialize_database() -> None:
@@ -69,8 +84,74 @@ def initialize_database() -> None:
                 translated_text TEXT NOT NULL,
                 created_at TEXT NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS generation_logs (
+                ticket_id TEXT NOT NULL,
+                based_on_message_id TEXT NOT NULL,
+                event_type TEXT NOT NULL CHECK(event_type IN ('first_draft', 'reprompt')),
+                response_text TEXT NOT NULL DEFAULT '',
+                sources_json TEXT NOT NULL DEFAULT '[]',
+                instructions TEXT NOT NULL DEFAULT '',
+                message_count INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL,
+                PRIMARY KEY (ticket_id, based_on_message_id, event_type)
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_generation_logs_ticket
+            ON generation_logs(ticket_id, event_type);
+
+            CREATE INDEX IF NOT EXISTS idx_generation_logs_created
+            ON generation_logs(created_at);
             """
         )
+        # Rebuild the old composite-key table without losing existing events.
+        connection.execute("BEGIN IMMEDIATE")
+        log_columns = {row["name"] for row in connection.execute(
+            "PRAGMA table_info(generation_logs)"
+        )}
+        if "id" not in log_columns:
+            connection.execute("ALTER TABLE generation_logs RENAME TO generation_logs_legacy")
+            connection.execute("""
+                CREATE TABLE generation_logs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    ticket_id TEXT NOT NULL,
+                    based_on_message_id TEXT NOT NULL,
+                    event_type TEXT NOT NULL CHECK(event_type IN ('first_draft', 'reprompt')),
+                    response_text TEXT NOT NULL DEFAULT '',
+                    sources_json TEXT NOT NULL DEFAULT '[]',
+                    instructions TEXT NOT NULL DEFAULT '',
+                    message_count INTEGER NOT NULL DEFAULT 0,
+                    created_at TEXT NOT NULL,
+                    messages_json TEXT,
+                    input_response_text TEXT,
+                    first_draft_id INTEGER REFERENCES generation_logs(id),
+                    prompt_version TEXT NOT NULL DEFAULT ''
+                )
+            """)
+            connection.execute("""
+                INSERT INTO generation_logs (
+                    ticket_id, based_on_message_id, event_type, response_text,
+                    sources_json, instructions, message_count, created_at
+                ) SELECT ticket_id, based_on_message_id, event_type, response_text,
+                    sources_json, instructions, message_count, created_at
+                FROM generation_logs_legacy ORDER BY created_at
+            """)
+            connection.execute("DROP TABLE generation_logs_legacy")
+            connection.execute("""
+                UPDATE generation_logs SET first_draft_id = (
+                    SELECT original.id FROM generation_logs AS original
+                    WHERE original.ticket_id = generation_logs.ticket_id
+                      AND original.based_on_message_id = generation_logs.based_on_message_id
+                      AND original.event_type = 'first_draft'
+                ) WHERE event_type = 'reprompt'
+            """)
+        connection.execute("CREATE INDEX IF NOT EXISTS idx_generation_logs_ticket ON generation_logs(ticket_id, event_type)")
+        connection.execute("CREATE INDEX IF NOT EXISTS idx_generation_logs_created ON generation_logs(created_at)")
+        connection.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_generation_logs_first
+            ON generation_logs(ticket_id, based_on_message_id)
+            WHERE event_type = 'first_draft'
+        """)
         columns = {
             row["name"]
             for row in connection.execute("PRAGMA table_info(messages)").fetchall()
@@ -203,7 +284,14 @@ def get_cached_draft(ticket_id: str, last_message_id: str) -> dict | str | None:
     return json.loads(row["response_json"]) if row else None
 
 
-def store_draft(ticket_id: str, last_message_id: str, response: dict | str) -> None:
+def store_draft(
+    ticket_id: str, last_message_id: str, response: dict | str, *,
+    event_type: Literal["first_draft", "reprompt"] | None = None,
+    messages: list[dict] | None = None,
+    instructions: str | None = None,
+    input_response: str | None = None,
+) -> None:
+    """Save the cache and optional generation event in one transaction."""
     with _connection() as connection:
         connection.execute(
             """
@@ -217,6 +305,94 @@ def store_draft(ticket_id: str, last_message_id: str, response: dict | str) -> N
             """,
             (ticket_id, last_message_id, json.dumps(response), _now(), TICKET_REPLY_PROMPT_VERSION),
         )
+        if event_type is not None:
+            _insert_generation_log(
+                connection, ticket_id, last_message_id, event_type=event_type,
+                reply=response.get("reply", "") if isinstance(response, dict) else response,
+                sources=response.get("sources") if isinstance(response, dict) else None,
+                instructions=instructions, messages=messages,
+                message_count=len(messages or []), input_response=input_response,
+            )
+
+
+
+# ---------------------------------------------------------------------------
+# Generation logs — capture initial draft + revision history for model loops
+# ---------------------------------------------------------------------------
+
+def _insert_generation_log(
+    connection, ticket_id, based_on_message_id, *, event_type,
+    reply="", sources=None, instructions=None, message_count=0,
+    messages=None, input_response=None,
+):
+    connection.execute(
+        """
+        INSERT INTO generation_logs (
+            ticket_id, based_on_message_id, event_type, response_text,
+            sources_json, instructions, message_count, created_at,
+            messages_json, input_response_text, first_draft_id, prompt_version
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, (
+            SELECT id FROM generation_logs
+            WHERE ticket_id = ? AND based_on_message_id = ? AND event_type = 'first_draft'
+        ), ?)
+        ON CONFLICT(ticket_id, based_on_message_id) WHERE event_type = 'first_draft'
+        DO NOTHING
+        """,
+        (ticket_id, based_on_message_id, event_type, reply, json.dumps(sources or []),
+         instructions or "", message_count, _now(),
+         json.dumps(messages, ensure_ascii=False) if messages is not None else None,
+         input_response, ticket_id, based_on_message_id, TICKET_REPLY_PROMPT_VERSION),
+    )
+
+
+def store_generation_log(
+    ticket_id: str, based_on_message_id: str, *,
+    event_type: Literal["first_draft", "reprompt"], reply: str = "",
+    sources: list[str] | None = None, instructions: str | None = None,
+    message_count: int = 0, messages: list[dict] | None = None,
+    input_response: str | None = None,
+) -> None:
+    """Append a revision event; preserve the first draft for each ticket revision."""
+    with _connection() as connection:
+        _insert_generation_log(
+            connection, ticket_id, based_on_message_id, event_type=event_type,
+            reply=reply, sources=sources, instructions=instructions,
+            message_count=len(messages) if messages is not None else message_count,
+            messages=messages, input_response=input_response,
+        )
+
+
+def get_generation_logs(
+    ticket_id: str | None = None,
+) -> list[dict]:
+    """Return generation logs, optionally filtered by ticket."""
+    conn = _read_connection()
+    try:
+        if ticket_id is not None:
+            rows = conn.execute(
+                "SELECT * FROM generation_logs WHERE ticket_id = ? ORDER BY created_at, id",
+                (ticket_id,),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM generation_logs ORDER BY created_at DESC, id DESC LIMIT 100"
+            ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def get_first_draft_for_ticket(ticket_id: str) -> dict | None:
+    """Retrieve the first-draft log entry (if any) for a ticket."""
+    conn = _read_connection()
+    try:
+        row = conn.execute(
+            "SELECT * FROM generation_logs WHERE ticket_id = ? AND event_type = 'first_draft' ORDER BY created_at LIMIT 1",
+            (ticket_id,),
+        ).fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
 
 
 def get_cached_translation(cache_key: str) -> str | None:

@@ -222,6 +222,8 @@ async def get_llm_response(ticket_id: str):
         ticket_id,
         last_message_id,
         draft_response,
+        event_type="first_draft",
+        messages=formatted_messages,
     )
 
     return {
@@ -299,7 +301,11 @@ async def post_reprompt(ticket_id, body: TicketRepromptResponseBody):
         body.instructions,
         body.last_response
     )
-    await asyncio.to_thread(store_draft, ticket_id, last_message_id, draft_text)
+    await asyncio.to_thread(
+        store_draft, ticket_id, last_message_id, draft_text,
+        event_type="reprompt", messages=formatted_messages,
+        instructions=body.instructions, input_response=body.last_response,
+    )
 
     return {
         "ticket_id": ticket_id,

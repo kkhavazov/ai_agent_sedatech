@@ -173,7 +173,10 @@ async def process_single_ticket(
                 ticket_id,
                 remote_last,
             )
-            await asyncio.to_thread(store_draft, ticket_id, remote_last, draft)
+            await asyncio.to_thread(
+                store_draft, ticket_id, remote_last, draft,
+                event_type="first_draft", messages=messages,
+            )
             summary["drafts_generated"] = 1
             log.info("Ticket %s — LLM draft generated.", ticket_id)
     except Exception as exc:

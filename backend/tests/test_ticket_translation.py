@@ -233,3 +233,26 @@ def test_ticket_drafting_still_receives_original_messages(api, translation, monk
     assert response.status_code == 200
     api.generate_ticket_reply.assert_called_once_with(originals, "t1", "m1")
     client.chat.assert_not_called()
+
+
+def test_api_preserves_first_reply_and_all_reprompts(api, monkeypatch):
+    messages = [{"role": "Customer", "text": "My PC will not start."}]
+    monkeypatch.setattr(api, "get_ticket_messages", AsyncMock(return_value=(messages, True, "m1")))
+    api.generate_ticket_reply.return_value = {"reply": "Original", "sources": ["source1"]}
+    revise = Mock(side_effect=["Short", "Formal"])
+    monkeypatch.setattr(api, "reprompt_call", revise)
+    client = TestClient(api.app)
+    assert client.get("/tickets/t1/llm_response").status_code == 200
+    assert client.get("/tickets/t1/llm_response").json()["cache_hit"] is True
+    for before, instruction in [("Original", "Shorter"), ("Short", "More formal")]:
+        assert client.post("/tickets/t1/reprompt", json={
+            "instructions": instruction, "last_response": before,
+        }).status_code == 200
+    logs = database.get_generation_logs("t1")
+    assert [row["response_text"] for row in logs] == ["Original", "Short", "Formal"]
+    assert [row["instructions"] for row in logs] == ["", "Shorter", "More formal"]
+    assert [row["input_response_text"] for row in logs] == [None, "Original", "Short"]
+    assert all(json.loads(row["messages_json"]) == messages for row in logs)
+    assert all(row["first_draft_id"] == logs[0]["id"] for row in logs[1:])
+    assert database.get_cached_draft("t1", "m1") == "Formal"
+    api.generate_ticket_reply.assert_called_once()
