@@ -1,4 +1,4 @@
-"""Periodically pre-generate cached drafts for all pending eDesk tickets."""
+"""Periodically cache French messages and drafts for pending eDesk tickets."""
 
 import asyncio
 import logging
@@ -67,6 +67,13 @@ async def generate_ticket_draft(
 
     try:
         async with semaphore:
+            # This endpoint persists translations in the backend's shared cache.
+            # Warm it even when a draft already exists for this ticket.
+            messages_response = await client.get(
+                f"{BACKEND_TICKETS_URL}/{ticket_id}",
+                headers=headers,
+            )
+            messages_response.raise_for_status()
             response = await client.get(
                 f"{BACKEND_TICKETS_URL}/{ticket_id}/llm_response",
                 headers=headers,

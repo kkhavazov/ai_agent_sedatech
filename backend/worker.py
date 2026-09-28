@@ -1,6 +1,6 @@
 """Cache worker: processes all open eDesk tickets and pre-generates caches.
 
-For each open ticket that has new messages since the last cache sync this
+For each open ticket, including tickets with missing translations, this
 worker will:
   1. Fetch individual message bodies from the eDesk API and store them in
      the SQLite messages table (so they are not re-fetched).
@@ -15,13 +15,12 @@ Run directly:
 """
 
 import asyncio
-import json
 import logging
 import os
 import sys
 from pathlib import Path
 
-_project_root = Path(__file__).resolve().parents[1]
+_project_root = Path(__file__).resolve().parent
 if str(_project_root) not in sys.path:
     sys.path.insert(0, str(_project_root))
 
@@ -31,19 +30,17 @@ load_dotenv(Path(__file__).parent / ".env")
 import httpx
 
 from llm_requests import (
-    TranslationError,
     translate_ticket_messages,
-    model_settings,
 )
 from database import (
     DATABASE_PATH,
     get_cached_draft,
-    get_cached_translation,
+    get_cached_message_ids,
+    get_cached_messages,
     get_ticket_revision,
     initialize_database,
     store_draft,
     store_ticket_messages,
-    store_translation,
 )
 
 EDESK_API_KEY = os.getenv("EDESK_API_KEY")
@@ -85,7 +82,7 @@ async def fetch_message_details(
     client: httpx.AsyncClient,
     message_id: str,
     semaphore: asyncio.Semaphore,
-) -> dict | None:
+) -> dict:
     """Fetch one eDesk message and normalise its role / body."""
     async with semaphore:
         resp = await client.get(
@@ -100,38 +97,24 @@ async def fetch_message_details(
     elif data["direction"] == "Outgoing":
         role = "Sedatech Support"
     else:
-        return None
+        return {"role": "", "text": "", "visible": False}
 
     return {"role": role, "text": data.get("body") or "", "visible": True}
 
 
 async def fetch_messages_for_ticket(
     client: httpx.AsyncClient, ticket_id: str, message_ids: list[str],
-) -> None:
+) -> int:
     """Fetch and cache every new message body for ticket_id."""
+    cached_ids = await asyncio.to_thread(get_cached_message_ids, ticket_id, message_ids)
+    missing_ids = [mid for mid in message_ids if mid not in cached_ids]
     semaphore = asyncio.Semaphore(MAX_CONCURRENT)
-    tasks = [fetch_message_details(client, mid, semaphore) for mid in message_ids]
+    tasks = [fetch_message_details(client, mid, semaphore) for mid in missing_ids]
     details = await asyncio.gather(*tasks)
-    usable = [d for d in details if d is not None]
-    store_ticket_messages(ticket_id, message_ids, {d["message_id"]: d for d in details})
-
-
-
-
-
-async def _fetch_message_for_translation(
-    client: httpx.AsyncClient, message_id: str,
-) -> dict | None:
-    """Fetch one message for translation / draft generation."""
-    resp = await client.get(
-        f"https://api.edesk.com/v1/messages/{message_id}",
-        headers=HEADERS,
+    await asyncio.to_thread(
+        store_ticket_messages, ticket_id, message_ids, dict(zip(missing_ids, details))
     )
-    if resp.status_code != 200:
-        return None
-    data = resp.json()["data"]
-    role = "Customer" if data["direction"] == "Incoming" else "Sedatech Support"
-    return {"role": role, "text": data.get("body") or ""}
+    return len(missing_ids)
 
 
 async def process_single_ticket(
@@ -155,37 +138,25 @@ async def process_single_ticket(
         "errors": [],
     }
 
-    # --- 1. Fetch raw messages if not already cached ---
-    if not is_current:
-        try:
-            await fetch_messages_for_ticket(client, ticket_id, message_ids)
-            summary["messages_cached"] = len(message_ids)
-            log.info("Ticket %s — fetched & cached %d messages.", ticket_id, len(message_ids))
-        except Exception as exc:
-            summary["errors"].append(f"message_fetch: {exc}")
-            log.warning("Ticket %s — could not fetch messages: %s", ticket_id, exc)
-            return summary
-
-    # --- 2. Translate messages to French (idempotent via DB cache) ---
+    # Verify individual bodies even when the cached revision is current.
     try:
-        messages_to_translate = []
-        for mid in message_ids:
-            mt = await _fetch_message_for_translation(client, mid)
-            if mt:
-                messages_to_translate.append(mt)
+        summary["messages_cached"] = await fetch_messages_for_ticket(
+            client, ticket_id, message_ids
+        )
+        messages = await asyncio.to_thread(get_cached_messages, ticket_id, message_ids)
+        if messages is None:
+            raise RuntimeError("Could not build complete ticket history")
+    except Exception as exc:
+        summary["errors"].append(f"message_fetch: {exc}")
+        return summary
 
-        if messages_to_translate:
-            # translate_ticket_messages uses per-message DB cache internally
-            results = await asyncio.gather(
-                *[asyncio.to_thread(translate_ticket_messages, [msg]) for msg in messages_to_translate],
-                return_exceptions=True,
-            )
-            new_translations = sum(1 for r in results if not isinstance(r, BaseException))
-            summary["translations_generated"] = new_translations
-            log.info("Ticket %s — translated %d messages.", ticket_id, new_translations)
+    # Warm translations from the exact stored text served by the API.
+    try:
+        await asyncio.to_thread(translate_ticket_messages, messages)
+        summary["translations_generated"] = len(messages)
     except Exception as exc:
         summary["errors"].append(f"translate_batch: {exc}")
-        log.warning("Ticket %s — translation batch failed: %s", ticket_id, exc)
+        return summary
 
     # --- 3. Generate draft response if missing ---
     try:
@@ -196,27 +167,21 @@ async def process_single_ticket(
         )
 
         if cached_draft is None and remote_last:
-            draft_messages: list[dict] = []
-            for mid in message_ids:
-                mt = await _fetch_message_for_translation(client, mid)
-                if mt:
-                    draft_messages.append(mt)
-
             draft = await asyncio.to_thread(
                 generate_ticket_reply,
-                draft_messages,
+                messages,
                 ticket_id,
                 remote_last,
             )
             await asyncio.to_thread(store_draft, ticket_id, remote_last, draft)
             summary["drafts_generated"] = 1
             log.info("Ticket %s — LLM draft generated.", ticket_id)
-    except ImportError:
-        log.warning("customer_support_agent not importable — skipping drafts.")
     except Exception as exc:
         summary["errors"].append(f"draft: {exc}")
         log.warning("Ticket %s — draft generation failed: %s", ticket_id, exc)
 
+
+    return summary
 
 
 async def run_cache_worker(ticket_ids: list[str] | None = None) -> list[dict]:
@@ -271,7 +236,7 @@ async def run_cache_worker(ticket_ids: list[str] | None = None) -> list[dict]:
         len(all_summaries), total_msgs, total_trans, total_drafts, total_errors,
     )
     if was_current:
-        log.info("  %d ticket(s) were already up-to-date (skipped).", was_current)
+        log.info("  %d ticket(s) already had current message revisions.", was_current)
     log.info("=" * 60)
 
     return all_summaries
@@ -300,4 +265,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
