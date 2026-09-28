@@ -113,8 +113,14 @@ if st.session_state.last_ticket != ticket_id or not st.session_state.current_dra
                 )
 
             llm_res = llm_response.json()
-            draft_text = llm_res["draft_response"]["reply"]
-            
+            raw_reply = llm_res.get("draft_response", {})
+
+            # Normalize: initial /llm_response returns {"reply": "..."}, reprompt returns the string directly
+            if isinstance(raw_reply, dict):
+                draft_text = raw_reply.get("reply") or ""
+            else:
+                draft_text = str(raw_reply) if raw_reply is not None else ""
+
             st.session_state.current_draft = html.unescape(draft_text).replace("<br />", "\n")
             st.session_state.last_ticket = ticket_id
         except Exception as e:
@@ -138,18 +144,33 @@ with col_editor:
         height=300
     )
     
-    c1, c2, c3 = st.columns(3)
+    # -- Message-type selector (Note = internal comment, Message = public) --
+    if "response_type" not in st.session_state:
+        st.session_state.response_type = "Message"
+    
+    resp_type = st.radio(
+        "Send as:",
+        options=["Message", "Note"],
+        horizontal=True,
+        label_visibility="collapsed",
+        index=0 if st.session_state.response_type == "Message" else 1,
+        key="resp_type_widget",
+        help='"Message" is visible to the customer; "Note" is an internal comment only.',
+    )
+    st.session_state.response_type = resp_type
+
+    c1, c2, c3 = st.columns([3, 1, 2])
     with c1:
         if st.button("🚀 Approve & Send", use_container_width=True):
             try:
                 res = requests.post(
                     f"{API_URL}/{ticket_id}/response", 
-                    json={"text": corrected_text, "type": "Note"}, 
+                    json={"text": corrected_text, "type": resp_type}, 
                     headers=headers,
                     timeout=60.0
                 )
                 if res.status_code == 200:
-                    st.success("Response sent to customer!")
+                    st.success(f"Response sent as {resp_type} to ticket {ticket_id}!")
                     st.rerun()
             except Exception as e:
                 st.error(f"Erreur d'envoi: {e}")
@@ -158,7 +179,7 @@ with col_editor:
         reprompt_instruction = st.text_input("What should the AI change?", placeholder="Make it more formal...")
         if st.button("🔄 Reprompt AI", use_container_width=True):
             if reprompt_instruction:
-                with st.spinner("Gemini is rethinking..."):
+                with st.spinner("AI is rethinking..."):
                     try:
                         payload = {
                             "instructions": reprompt_instruction,
@@ -172,8 +193,14 @@ with col_editor:
                         )
                         reprompt_response.raise_for_status()
                         llm_res = reprompt_response.json()
-                        
-                        new_draft = llm_res["draft_response"]
+
+                        # Normalize: reprompt returns the string directly
+                        raw_reply = llm_res.get("draft_response", "")
+                        if isinstance(raw_reply, dict):
+                            new_draft = raw_reply.get("reply") or ""
+                        else:
+                            new_draft = str(raw_reply) if raw_reply is not None else ""
+
                         st.session_state.current_draft = html.unescape(new_draft).replace("<br />", "\n")
                         st.rerun() 
                     except Exception as e:

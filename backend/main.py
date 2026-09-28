@@ -254,23 +254,30 @@ async def get_cache_status(ticket_id: str):
 @app.post("/tickets/{ticket_id}/response")
 async def post_response(ticket_id: str, body: TicketPostResponseBody):
     if body.type not in ["Note", "Message"]:
-        raise HTTPException(status_code=400, detail="Invalid response type. Must be 'Note' or 'Public'.")
+        raise HTTPException(status_code=400, detail="Invalid response type. Must be 'Note' or 'Message'.")
 
     url = f"https://api.edesk.com/v1/messages"
-    if body.type == "Note":
-        payload = {
-            "type": "Note",
-            "ticket_id": ticket_id,
-            "body": body.text
-        }
-    headers = {
-        "accept": "application/json",
-        "content-type": "application/json",
-        "authorization": token
+    edesk_payload = {
+        "type": body.type,
+        "ticket_id": ticket_id,
+        "body": body.text,
     }
-    
-    response = httpx.post(url, json=payload, headers=headers)
-    return {"message": f"Response for ticket {ticket_id} sent successfully!, Status code: {response.status_code}", "Error": {response.text} if response.status_code != 200 else None}
+
+    timeout = httpx.Timeout(30.0, connect=5.0)
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        response = await client.post(url, json=edesk_payload, headers=headers)
+
+    if response.status_code >= 400:
+        raise HTTPException(
+            status_code=502,
+            detail=f"eDesk rejected the message: {response.text[:300]}",
+        )
+
+    return {
+        "message": f"Response for ticket {ticket_id} sent successfully.",
+        "status_code": response.status_code,
+        "body": response.text,
+    }
 
 
 class TicketRepromptResponseBody(BaseModel):
