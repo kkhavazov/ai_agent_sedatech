@@ -37,6 +37,7 @@ services:
       REPOSITORY_BACKEND: ${REPOSITORY_BACKEND:-sqlserver}
       OLLAMA_TIMEOUT_SECONDS: ${OLLAMA_TIMEOUT_SECONDS:-30}
       INVENTORY_MAX_TOOL_ROUNDS: ${INVENTORY_MAX_TOOL_ROUNDS:-3}
+      BACKEND_TICKETS_URL: http://fastapi:8000/tickets
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped

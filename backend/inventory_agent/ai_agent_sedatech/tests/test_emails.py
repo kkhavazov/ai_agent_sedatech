@@ -3,11 +3,21 @@ from unittest.mock import MagicMock
 
 import pymssql
 import pytest
+import requests
 
 from repositories.sqlserver_emails_repository import SqlServerEmailsRepository
 from services.order_service import OrderService
 from repositories.demo_order_repository import DemoOrderRepository
 from tools.factory import build_tool_registry
+
+
+@pytest.fixture(autouse=True)
+def ticket_session(monkeypatch):
+    session = MagicMock()
+    session.get.return_value.json.return_value = {"data": []}
+    session.__enter__.return_value = session
+    monkeypatch.setattr("repositories.sqlserver_emails_repository.requests.Session", lambda: session)
+    return session
 
 
 def make_repository():
@@ -33,7 +43,7 @@ def make_repository():
 )
 def test_optional_dates_are_bound_parameters(filters, parameters):
     repository, connection, cursor = make_repository()
-    assert repository.get_emails(**filters) == ["customer@example.com"]
+    assert repository.get_emails(**filters) == [{"email": "customer@example.com", "customer_service": False}]
     query, bound = cursor.execute.call_args.args
     assert bound == parameters
     assert "Vertreter = 8" in query
@@ -73,7 +83,7 @@ def test_registered_email_tool_defaults_validates_and_returns_empty_results():
     result = registry.execute("get_emails", {})
     assert result["success"] is True
     assert result["data"] == {
-        "platform": "sedatech", "emails": ["customer@example.com"], "count": 1
+        "platform": "sedatech", "emails": [{"email": "customer@example.com", "customer_service": False}], "count": 1
     }
     for arguments in (
         {"platform": "amazon"},
@@ -91,3 +101,53 @@ def test_email_tool_is_not_registered_without_repository():
     assert "get_emails" not in {
         schema["function"]["name"] for schema in registry.schemas()
     }
+
+
+def test_checks_every_email_and_marks_nonempty_results(ticket_session):
+    repository, connection, cursor = make_repository()
+    repository.tickets_api_url = "http://backend:8000/tickets"
+    cursor.fetchall.return_value = [{"Email": "one+tag@example.com"}, {"Email": "two@example.com"}]
+    ticket_session.get.return_value.json.side_effect = [{"data": [{"id": 1}]}, {"data": []}]
+    assert repository.get_emails() == [
+        {"email": "one+tag@example.com", "customer_service": True},
+        {"email": "two@example.com", "customer_service": False},
+    ]
+    assert [call.args[0] for call in ticket_session.get.call_args_list] == [
+        "http://backend:8000/tickets/emails/one%2Btag%40example.com",
+        "http://backend:8000/tickets/emails/two%40example.com",
+    ]
+    connection.close.assert_called_once()
+
+
+@pytest.mark.parametrize("payload", [{}, {"data": None}, {"data": {}}, []])
+def test_invalid_ticket_response_is_not_marked_false(ticket_session, payload):
+    repository, _, _ = make_repository()
+    ticket_session.get.return_value.json.return_value = payload
+    with pytest.raises(RuntimeError, match="TICKET_LOOKUP_ERROR"):
+        repository.get_emails()
+
+
+def test_ticket_request_failure_is_not_marked_false(ticket_session):
+    repository, _, _ = make_repository()
+    ticket_session.get.side_effect = requests.Timeout()
+    with pytest.raises(RuntimeError, match="TICKET_LOOKUP_ERROR"):
+        repository.get_emails()
+
+
+def test_no_ticket_requests_for_empty_emails(ticket_session):
+    repository, _, cursor = make_repository()
+    cursor.fetchall.return_value = []
+    assert repository.get_emails() == []
+    ticket_session.get.assert_not_called()
+
+
+@pytest.mark.parametrize("status", [404, 401, 502])
+def test_ticket_http_failure_reports_status(ticket_session, status):
+    repository, _, _ = make_repository()
+    response = requests.Response()
+    response.status_code = status
+    ticket_session.get.return_value.raise_for_status.side_effect = requests.HTTPError(response=response)
+    with pytest.raises(RuntimeError, match=f"HTTP {status}") as error:
+        repository.get_emails()
+    if status == 404:
+        assert "rebuild the backend" in str(error.value)

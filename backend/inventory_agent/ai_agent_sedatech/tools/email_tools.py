@@ -48,7 +48,9 @@ def build_get_emails_tool(repository: SqlServerEmailsRepository) -> ToolDefiniti
             "invoice dates using date_from and date_to (YYYY-MM-DD). "
             "For a single day, set both dates to that day. Preserve explicit "
             "years; when omitted, use the current year from the request context. "
-            "Omit dates to retrieve all matching emails."
+            "Omit dates to retrieve all matching emails. Each entry contains email "
+            "and customer_service, which is true when the ticket lookup returns "
+            "a nonempty list, indicating contact through the ticket system."
         ),
         arguments_model=GetEmailsArguments,
         handler=get_emails,

@@ -1,4 +1,5 @@
 from copy import deepcopy
+import asyncio
 from dataclasses import replace
 import json
 from pathlib import Path
@@ -32,6 +33,83 @@ def api(translation, monkeypatch):
     monkeypatch.setattr(main, "get_remote_ticket", AsyncMock(return_value={}))
     monkeypatch.setattr(main, "generate_ticket_reply", Mock())
     return main
+
+
+@pytest.mark.parametrize("contacts", [[], [{"id": "contact-1"}]])
+def test_email_endpoint_awaits_lookup_with_path_email(api, monkeypatch, contacts):
+    lookup = AsyncMock(return_value=contacts)
+    tickets = [{"id": "ticket-1"}]
+    ticket_lookup = AsyncMock(return_value=tickets)
+    monkeypatch.setattr(api, "get_contacts_list_by_email", lookup)
+    monkeypatch.setattr(api, "get_info_by_contacts", ticket_lookup)
+    response = TestClient(api.app).get("/tickets/emails/customer%2Btag%40example.com")
+    assert response.status_code == 200
+    assert response.json() == {"data": tickets if contacts else []}
+    lookup.assert_awaited_once()
+    assert lookup.await_args.kwargs["email"] == "customer+tag@example.com"
+    if contacts:
+        ticket_lookup.assert_awaited_once()
+        assert ticket_lookup.await_args.kwargs["contacts_id"] == "contact-1"
+    else:
+        ticket_lookup.assert_not_awaited()
+
+
+def test_email_endpoint_checks_all_contacts_and_deduplicates_tickets(api, monkeypatch):
+    monkeypatch.setattr(api, "get_contacts_list_by_email", AsyncMock(return_value=[
+        {"id": 1}, {"id": 2}, {"id": 2}, {"id": 3},
+    ]))
+    lookup = AsyncMock(side_effect=[[], [{"id": 10}], [{"id": 10}, {"id": 11}]])
+    monkeypatch.setattr(api, "get_info_by_contacts", lookup)
+    response = TestClient(api.app).get("/tickets/emails/customer@example.com")
+    assert response.status_code == 200
+    assert response.json() == {"data": [{"id": 10}, {"id": 11}]}
+    assert [call.kwargs["contacts_id"] for call in lookup.await_args_list] == [1, 2, 3]
+
+
+def test_email_endpoint_contact_without_tickets_returns_empty(api, monkeypatch):
+    monkeypatch.setattr(api, "get_contacts_list_by_email", AsyncMock(return_value=[{"id": 1}]))
+    monkeypatch.setattr(api, "get_info_by_contacts", AsyncMock(return_value=[]))
+    response = TestClient(api.app).get("/tickets/emails/customer@example.com")
+    assert response.status_code == 200
+    assert response.json() == {"data": []}
+
+
+@pytest.mark.parametrize("resource", ["contacts", "tickets"])
+@pytest.mark.parametrize("failure", ["http", "timeout", "json", "missing_data", "invalid_record"])
+def test_email_lookup_upstream_failures_are_502(api, monkeypatch, resource, failure):
+    request = httpx.Request("GET", f"https://api.edesk.com/v1/{resource}")
+    response = httpx.Response(200, json={"data": [{"id": 1}]}, request=request)
+    if failure == "http":
+        response = httpx.Response(429, request=request)
+    elif failure == "json":
+        response = httpx.Response(200, text="not json", request=request)
+    elif failure == "missing_data":
+        response = httpx.Response(200, json={}, request=request)
+    elif failure == "invalid_record":
+        response = httpx.Response(200, json={"data": [{}]}, request=request)
+    get = AsyncMock(return_value=response)
+    if failure == "timeout":
+        get.side_effect = httpx.ReadTimeout("timeout", request=request)
+    monkeypatch.setattr(api.httpx.AsyncClient, "get", get)
+    if resource == "tickets":
+        monkeypatch.setattr(api, "get_contacts_list_by_email", AsyncMock(return_value=[{"id": 1}]))
+    result = TestClient(api.app).get("/tickets/emails/customer@example.com")
+    assert result.status_code == 502
+    assert resource in result.json()["detail"]
+
+
+def test_email_lookup_helpers_encode_query_parameters(api):
+    captured = []
+    def handler(request):
+        captured.append(request)
+        return httpx.Response(200, json={"data": []})
+    async def run():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            assert await api.get_contacts_list_by_email(client, "customer+tag@example.com") == []
+            assert await api.get_info_by_contacts(client, 123) == []
+    asyncio.run(run())
+    assert captured[0].url.params["email"] == "customer+tag@example.com"
+    assert captured[1].url.params["filter_contact_id_equals"] == "123"
 
 
 @pytest.mark.parametrize("cache_hit", [True, False])

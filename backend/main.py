@@ -161,6 +161,53 @@ async def get_ticket_messages(
     await asyncio.to_thread(store_ticket_messages, ticket_id, message_ids, {})
     return messages, False, last_message_id
 
+async def get_contacts_list_by_email(
+    client: httpx.AsyncClient,
+    email: str,
+):
+    return await get_edesk_list(client, "contacts", {"email": email})
+
+async def get_info_by_contacts(
+    client: httpx.AsyncClient,
+    contacts_id: str | int,
+):
+    return await get_edesk_list(
+        client, "tickets", {"filter_contact_id_equals": contacts_id}
+    )
+
+
+async def get_edesk_list(
+    client: httpx.AsyncClient, resource: str, params: dict,
+) -> list[dict]:
+    try:
+        response = await client.get(
+            f"https://api.edesk.com/v1/{resource}", params=params, headers=headers,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        data = payload.get("data") if isinstance(payload, dict) else None
+        if not isinstance(data, list) or any(
+            not isinstance(item, dict) or not isinstance(item.get("id"), (str, int))
+            or isinstance(item["id"], bool) or item["id"] == ""
+            for item in data
+        ):
+            raise ValueError("Expected a data list containing records with IDs")
+        return data
+    except httpx.HTTPStatusError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"eDesk {resource} request failed: HTTP {exc.response.status_code}",
+        ) from exc
+    except httpx.RequestError as exc:
+        raise HTTPException(
+            status_code=502, detail=f"Could not reach eDesk for {resource} lookup",
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=502, detail=f"Invalid eDesk {resource} response",
+        ) from exc
+
+
 class TicketPostResponseBody(BaseModel):
     text: str
     type: str
@@ -314,3 +361,20 @@ async def post_reprompt(ticket_id, body: TicketRepromptResponseBody):
         "cache_hit": False,
         "messages_cache_hit": messages_cache_hit,
     }
+
+@app.get("/tickets/emails/{email}")
+async def get_ticket_by_email(email: str):
+    timeout = httpx.Timeout(30.0, connect=5.0)
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        contacts = await get_contacts_list_by_email(client=client, email=email)
+        tickets_by_id = {}
+        seen_contacts = set()
+        for contact in contacts:
+            contact_id = contact["id"]
+            if str(contact_id) in seen_contacts:
+                continue
+            seen_contacts.add(str(contact_id))
+            tickets = await get_info_by_contacts(client=client, contacts_id=contact_id)
+            for ticket in tickets:
+                tickets_by_id[str(ticket["id"])] = ticket
+    return {"data": list(tickets_by_id.values())}
