@@ -323,14 +323,17 @@ def test_api_preserves_first_reply_and_all_reprompts(api, monkeypatch):
     assert client.get("/tickets/t1/llm_response").status_code == 200
     assert client.get("/tickets/t1/llm_response").json()["cache_hit"] is True
     for before, instruction in [("Original", "Shorter"), ("Short", "More formal")]:
-        assert client.post("/tickets/t1/reprompt", json={
+        response = client.post("/tickets/t1/reprompt", json={
             "instructions": instruction, "last_response": before,
-        }).status_code == 200
+        })
+        assert response.status_code == 200
+        assert response.json()["sources"] == ["source1"]
+        assert client.get("/tickets/t1/llm_response").json()["sources"] == ["source1"]
     logs = database.get_generation_logs("t1")
     assert [row["response_text"] for row in logs] == ["Original", "Short", "Formal"]
     assert [row["instructions"] for row in logs] == ["", "Shorter", "More formal"]
     assert [row["input_response_text"] for row in logs] == [None, "Original", "Short"]
     assert all(json.loads(row["messages_json"]) == messages for row in logs)
     assert all(row["first_draft_id"] == logs[0]["id"] for row in logs[1:])
-    assert database.get_cached_draft("t1", "m1") == "Formal"
+    assert database.get_cached_draft("t1", "m1") == {"reply": "Formal", "sources": ["source1"]}
     api.generate_ticket_reply.assert_called_once()

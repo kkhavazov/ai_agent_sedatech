@@ -11,6 +11,7 @@ from database import (
     get_cached_draft,
     get_cached_message_ids,
     get_cached_messages,
+    get_sources_for_ticket,
     get_ticket_revision,
     initialize_database,
     store_draft,
@@ -251,11 +252,13 @@ async def get_llm_response(ticket_id: str):
         get_cached_draft, ticket_id, last_message_id
     )
     if cached_draft is not None:
+        sources = await asyncio.to_thread(get_sources_for_ticket, ticket_id, last_message_id)
         return {
             "ticket_id": ticket_id,
             "draft_response": cached_draft,
             "last_message_id": last_message_id,
             "cache_hit": True,
+            "sources": sources,
         }
 
     draft_response = await asyncio.to_thread(
@@ -264,6 +267,7 @@ async def get_llm_response(ticket_id: str):
         ticket_id,
         last_message_id,
     )
+    sources = draft_response.get("sources", [])
     await asyncio.to_thread(
         store_draft,
         ticket_id,
@@ -279,6 +283,7 @@ async def get_llm_response(ticket_id: str):
         "last_message_id": last_message_id,
         "cache_hit": False,
         "messages_cache_hit": messages_cache_hit,
+        "sources": sources,
     }
 
 
@@ -348,8 +353,9 @@ async def post_reprompt(ticket_id, body: TicketRepromptResponseBody):
         body.instructions,
         body.last_response
     )
+    sources = await asyncio.to_thread(get_sources_for_ticket, ticket_id, last_message_id)
     await asyncio.to_thread(
-        store_draft, ticket_id, last_message_id, draft_text,
+        store_draft, ticket_id, last_message_id, {"reply": draft_text, "sources": sources},
         event_type="reprompt", messages=formatted_messages,
         instructions=body.instructions, input_response=body.last_response,
     )
@@ -357,6 +363,7 @@ async def post_reprompt(ticket_id, body: TicketRepromptResponseBody):
     return {
         "ticket_id": ticket_id,
         "draft_response": draft_text,
+        "sources": sources,
         "last_message_id": last_message_id,
         "cache_hit": False,
         "messages_cache_hit": messages_cache_hit,

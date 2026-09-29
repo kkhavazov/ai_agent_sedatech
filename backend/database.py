@@ -395,6 +395,27 @@ def get_first_draft_for_ticket(ticket_id: str) -> dict | None:
         conn.close()
 
 
+def get_sources_for_ticket(ticket_id: str, last_message_id: str) -> list[str]:
+    """Return original retrieval sources; reprompts do not run a new search."""
+    draft = get_cached_draft(ticket_id, last_message_id)
+    if isinstance(draft, dict) and "sources" in draft:
+        return draft["sources"] or []
+    conn = _read_connection()
+    try:
+        row = conn.execute(
+            "SELECT sources_json FROM generation_logs "
+            "WHERE ticket_id = ? AND based_on_message_id = ? "
+            "AND event_type = 'first_draft' "
+            "ORDER BY created_at DESC, id DESC LIMIT 1",
+            (ticket_id, last_message_id),
+        ).fetchone()
+        if row and row["sources_json"]:
+            return json.loads(row["sources_json"])
+        return []
+    finally:
+        conn.close()
+
+
 def get_cached_translation(cache_key: str) -> str | None:
     with _connection() as connection:
         row = connection.execute(

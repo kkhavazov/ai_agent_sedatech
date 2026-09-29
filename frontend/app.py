@@ -1,5 +1,6 @@
 import os
 import html
+from urllib.parse import quote
 import requests
 from dotenv import load_dotenv
 import streamlit as st
@@ -95,6 +96,14 @@ if "current_draft" not in st.session_state:
     st.session_state.current_draft = ""
 if "last_ticket" not in st.session_state:
     st.session_state.last_ticket = None
+if "current_sources" not in st.session_state:
+    st.session_state.current_sources = []
+
+ticket_revision = (str(ticket_id), ticket_data.get("last_message_id"))
+if st.session_state.get("draft_revision") != ticket_revision:
+    st.session_state.current_draft = ""
+    st.session_state.current_sources = []
+    st.session_state.reference_messages = {}
 
 if st.session_state.last_ticket != ticket_id or not st.session_state.current_draft:
     with st.spinner("Generating initial draft..."):
@@ -122,9 +131,12 @@ if st.session_state.last_ticket != ticket_id or not st.session_state.current_dra
                 draft_text = str(raw_reply) if raw_reply is not None else ""
 
             st.session_state.current_draft = html.unescape(draft_text).replace("<br />", "\n")
+            st.session_state.current_sources = llm_res.get("sources", [])
             st.session_state.last_ticket = ticket_id
+            st.session_state.draft_revision = ticket_revision
         except Exception as e:
             st.error(f"Erreur lors de la génération du draft initial : {e}")
+            st.stop()
 
 
 
@@ -144,6 +156,48 @@ with col_editor:
         height=300
     )
     
+    # -- Referenced Tickets Section --
+    sources = list(dict.fromkeys(
+        str(source) for source in (st.session_state.get("current_sources") or [])
+    ))
+    st.divider()
+    st.subheader("Referenced Tickets")
+    if sources:
+        st.caption(
+            "Tickets returned by the agent's knowledge search; not necessarily cited "
+            "in the reply. Messages are loaded from eDesk when requested."
+        )
+        src_ticket = st.selectbox(
+            "Reference ticket", sources, key=f"reference_ticket_{ticket_id}",
+        )
+        st.link_button(
+            "Open reference in eDesk",
+            f"https://app.edesk.io/tickets/{quote(src_ticket, safe='')}",
+        )
+        reference_cache = st.session_state.setdefault("reference_messages", {})
+        if st.button("Load / refresh reference messages"):
+            reference_cache.pop(src_ticket, None)
+            with st.spinner("Loading reference messages..."):
+                try:
+                    reference_response = requests.get(
+                        f"{API_URL}/{quote(src_ticket, safe='')}",
+                        headers=headers, timeout=120,
+                    )
+                    reference_response.raise_for_status()
+                    reference_cache[src_ticket] = reference_response.json().get("messages", [])
+                except (requests.RequestException, ValueError) as exc:
+                    st.error(f"Could not load reference ticket {src_ticket}: {exc}")
+        if src_ticket in reference_cache:
+            with st.expander(f"Messages from ticket {src_ticket}", expanded=True):
+                if not reference_cache[src_ticket]:
+                    st.info("No visible messages in this reference ticket.")
+                for message in reference_cache[src_ticket]:
+                    st.chat_message(message["role"]).write(
+                        clean_html_for_rag(message.get("text") or "")
+                    )
+    else:
+        st.caption("No reference tickets were recorded for this draft.")
+
     # -- Message-type selector (Note = internal comment, Message = public) --
     if "response_type" not in st.session_state:
         st.session_state.response_type = "Message"
@@ -183,7 +237,7 @@ with col_editor:
                     try:
                         payload = {
                             "instructions": reprompt_instruction,
-                            "last_response": st.session_state.current_draft,
+                            "last_response": corrected_text,
                         }
                         reprompt_response = requests.post(
                             f"{API_URL}/{ticket_id}/reprompt", 
@@ -202,6 +256,7 @@ with col_editor:
                             new_draft = str(raw_reply) if raw_reply is not None else ""
 
                         st.session_state.current_draft = html.unescape(new_draft).replace("<br />", "\n")
+                        st.session_state.current_sources = llm_res.get("sources", [])
                         st.rerun() 
                     except Exception as e:
                         st.error(f"Erreur lors du reprompt: {e}")

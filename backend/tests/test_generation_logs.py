@@ -43,6 +43,24 @@ def test_failed_log_rolls_back_cached_draft(cache):
     assert database.get_generation_logs("t1") == []
 
 
+def test_sources_survive_legacy_string_reprompts_and_are_revision_scoped(cache):
+    database.store_draft("t1", "m1", {"reply": "Original", "sources": ["s1", "s2"]},
+                         event_type="first_draft")
+    database.store_draft("t1", "m1", "Revised", event_type="reprompt")
+    assert database.get_sources_for_ticket("t1", "m1") == ["s1", "s2"]
+    assert database.get_sources_for_ticket("t1", "m2") == []
+    assert database.get_sources_for_ticket("t2", "m1") == []
+
+
+def test_sources_prefer_current_cached_draft_over_original_log(cache):
+    database.store_draft("t1", "m1", {"reply": "Original", "sources": ["old"]},
+                         event_type="first_draft")
+    database.store_draft("t1", "m1", {"reply": "New", "sources": ["new"]})
+    assert database.get_sources_for_ticket("t1", "m1") == ["new"]
+    database.store_draft("t1", "m1", {"reply": "No sources", "sources": []})
+    assert database.get_sources_for_ticket("t1", "m1") == []
+
+
 def test_legacy_logs_migrate_without_losing_events(monkeypatch, tmp_path):
     path = tmp_path / "legacy.db"
     monkeypatch.setattr(database, "DATABASE_PATH", path)
