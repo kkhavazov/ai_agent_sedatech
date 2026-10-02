@@ -172,7 +172,7 @@ with col_editor:
         )
         st.link_button(
             "Open reference in eDesk",
-            f"https://app.edesk.io/tickets/{quote(src_ticket, safe='')}",
+            f"https://dashboard-3.edesk.com/crm/view/{quote(src_ticket, safe='')}",
         )
         reference_cache = st.session_state.setdefault("reference_messages", {})
         if st.button("Load / refresh reference messages"):

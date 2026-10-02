@@ -14,7 +14,8 @@ def reply_modules():
     with patch("qdrant_client.QdrantClient"), patch("ollama.Client"):
         import llm_requests
         import customer_support_agent
-    return customer_support_agent, llm_requests
+    with patch.object(llm_requests.Conversation, "_retrieve", return_value=[]):
+        yield customer_support_agent, llm_requests
 
 
 @pytest.fixture
@@ -44,6 +45,36 @@ def test_ticket_generation_sends_french_policy_to_model(reply_modules, model_cal
     assert any(message.content == customer_text for message in sent_messages)
     assert "customer-facing ticket reply" in sent_messages[-1].content
     assert result["reply"].startswith("Bonjour")
+
+
+def test_retrieval_sources_saved_without_model_tool_calls(reply_modules, model_call):
+    agent, requests = reply_modules
+    requests.Conversation._retrieve.return_value = [
+        {"ticket_id": "current", "problem_text": "Self", "linked_resolution": "Ignore"},
+        {"ticket_id": 123, "problem_text": "No power", "linked_resolution": "Check cable"},
+        {"ticket_id": 123, "problem_text": "Another chunk", "linked_resolution": "Check switch"},
+    ]
+    result = agent.generate_ticket_reply([
+        {"role": "Customer", "text": "My PC will not start"},
+        {"role": "Sedatech Support", "text": "Is the power light on?"},
+        {"role": "Customer", "text": "No"},
+    ], "current", str(uuid4()))
+    requests.Conversation._retrieve.assert_called_once_with("My PC will not start\n\nNo")
+    assert result["sources"] == ["123"]
+    sent = model_call.call_args.args[1][-1].content
+    assert "Check cable" in sent
+    assert "Check switch" in sent
+    assert '"ticket_id": "current"' not in sent
+
+
+def test_retrieval_failure_prevents_unreferenced_draft(reply_modules, model_call):
+    agent, requests = reply_modules
+    requests.Conversation._retrieve.side_effect = RuntimeError("Knowledge base unavailable")
+    with pytest.raises(RuntimeError, match="Knowledge base unavailable"):
+        agent.generate_ticket_reply([
+            {"role": "Customer", "text": "No power"},
+        ], str(uuid4()), "revision-1")
+    model_call.assert_not_called()
 
 
 def test_revision_keeps_french_policy_above_revision_instructions(reply_modules, model_call):

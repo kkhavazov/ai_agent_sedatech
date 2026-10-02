@@ -212,3 +212,4 @@ draft_version/
 
 *:Zone.Identifier
 backend/inventory_agent/ai_agent_sedatech/services/forecast.db
+backend/cache-snapshot.db
