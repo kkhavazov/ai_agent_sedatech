@@ -14,6 +14,22 @@ class SessionState(dict):
     __setattr__ = dict.__setitem__
 
 
+def test_ga4_chart_reaches_chat(chart_app):
+    chart = {"type": "line", "data": [{"x": "2026-09-01", "y": 12}]}
+    result = {"messages": [HumanMessage(content="Graph website sessions"),
+              ToolMessage(content=json.dumps({"chart": chart}),
+                          name="query_website_traffic", tool_call_id="ga4")]}
+    assert chart_app.extract_analysis_chart(result) == chart
+
+
+def test_analytics_only_registered_for_internal_chat(support_module):
+    with patch.object(support_module, "create_agent") as create:
+        support_module._build_support_agent("test", include_analytics=True)
+        assert "query_website_traffic" in [tool.name for tool in create.call_args.kwargs["tools"]]
+        support_module._build_support_agent("ticket")
+        assert "query_website_traffic" not in [tool.name for tool in create.call_args.kwargs["tools"]]
+
+
 @pytest.fixture
 def support_module():
     with patch("qdrant_client.QdrantClient"), patch("ollama.Client"):

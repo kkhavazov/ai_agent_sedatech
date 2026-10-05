@@ -1,0 +1,13 @@
+# Local development: reuse the user's Google ADC login without copying it into an image.
+# Run with: docker compose -f docker-compose.yml -f docker-compose.ga4.yml up -d --build support-agent
+services:
+  support-agent:
+    environment:
+      GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/ga4-adc.json
+    volumes:
+      - type: bind
+        source: ${APPDATA}/gcloud/application_default_credentials.json
+        target: /run/secrets/ga4-adc.json
+        read_only: true
+        bind:
+          create_host_path: false

@@ -67,7 +67,7 @@ def extract_analysis_chart(result: dict, prompt: str = "") -> dict | None:
     current_turn_messages = messages[latest_user_index + 1:]
     for message in reversed(current_turn_messages):
         tool_name = getattr(message, "name", None)
-        if tool_name not in {"analyze_data", "query_inventory"}:
+        if tool_name not in {"analyze_data", "query_inventory", "query_website_traffic"}:
             continue
         try:
             payload = json.loads(str(message.text))
@@ -144,14 +144,14 @@ for message in st.session_state.messages:
         render_chart(message.get("chart"))
 
 # Accept user input
-if prompt := st.chat_input("How can I help you with your order or support ticket?"):
+if prompt := st.chat_input("Ask about orders, inventory, support, or website traffic"):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
     # Invoke the LangChain agent
     with st.chat_message("assistant"):
-        with st.spinner("Checking inventory and knowledge base..."):
+        with st.spinner("Checking your data..."):
             try:
                 result = customer_support_agent.invoke(
                     {"messages": [{"role": "user", "content": prompt}]},

@@ -9,6 +9,7 @@ fastapi-cache2[redis]
 jinja2
 qdrant_client
 google-genai
+google-analytics-data>=0.18,<1
 langchain>=1,<2
 langchain-openai>=1,<2
 langchain-google-genai>=2,<4
