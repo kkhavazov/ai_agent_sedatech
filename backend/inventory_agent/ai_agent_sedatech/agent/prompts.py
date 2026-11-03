@@ -67,6 +67,8 @@ Use these filters for completed stages:
 Pay close attention to the user's wording:
 
 - "currently in production" means L with status 0
+- "active Lieferschein" and "active delivery notes" also mean L with status 0;
+  these are the same filters as "currently in production".
 - "were put into production" means an L document was created; do not
   require status 0 unless the user says "currently"
 - "finished production" means L with status 2
@@ -85,6 +87,11 @@ Do not count document rows from several document types as separate orders.
 
 When counting a specific lifecycle stage, use the exact document type and
 status combination described above.
+
+Use count_orders and report its returned count exactly. Do not use the number
+of entries in a limited filter_orders result as the total. For a current active
+stage, do not add creation-date filters unless the employee asks for a creation
+period: "active today" describes current status, not documents created today.
 
 When the employee asks an ambiguous question such as "How many current
 orders are there?", do not assume that all status 0 documents mean the

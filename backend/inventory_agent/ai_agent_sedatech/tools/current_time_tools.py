@@ -13,12 +13,7 @@ class GetCurrentTimeArgs(BaseModel):
 def create_current_time_handler(order_service: OrderService):
     def handler(*args: Any, **kwargs: Any) -> dict[str, str]:
         import zoneinfo
-        try:
-            tz = zoneinfo.ZoneInfo("Europe/Berlin")
-        except zoneinfo.ZoneInfoNotFoundError:
-            # Fallback configuration for missing OS timezone databases (e.g. Windows)
-            from datetime import timezone, timedelta
-            tz = timezone(timedelta(hours=2)) 
+        tz = zoneinfo.ZoneInfo("Europe/Berlin")
 
         now = datetime.now(tz)
         

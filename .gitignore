@@ -212,4 +212,10 @@ draft_version/
 
 *:Zone.Identifier
 backend/inventory_agent/ai_agent_sedatech/services/forecast.db
-backend/cache-snapshot.db
+# Local cache databases and SQLite sidecar files
+cache.db
+cache-snapshot.db
+*.db-shm
+*.db-wal
+*.db-journal
+.uv-cache/

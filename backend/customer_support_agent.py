@@ -6,7 +6,8 @@ import queue
 import socket
 import sys
 import threading
-from datetime import date
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
@@ -15,7 +16,10 @@ from langchain.agents import create_agent
 from langchain.agents.middleware import (
     ModelCallLimitMiddleware,
     ToolCallLimitMiddleware,
+    dynamic_prompt,
+    before_model,
 )
+from langchain_core.messages import AIMessage, ToolMessage
 from langchain.tools import tool
 from langchain_core.tools import StructuredTool
 from langgraph.checkpoint.memory import InMemorySaver
@@ -491,65 +495,70 @@ def analyze_data(
 
 
 SUPPORT_AGENT_SYSTEM_PROMPT = (
-        "You are an enterprise customer-service assistant. "
-        f"Today's date is {date.today().isoformat()}. For a date range ending "
-        "today, omit analyze_data's date_to argument so current records are not "
-        "excluded by an inferred cutoff. "
-        "Use search_customer_kb for policies, troubleshooting, and precedent "
-        "tickets. Tool routing is strict. Use analyze_data for aggregate order "
-        "metrics such as revenue, order counts, production time, and their trends "
-        "or grouped breakdowns. Use query_inventory for component sales or usage "
-        "quantities over time, including tables and graphs; its inventory agent "
-        "uses analyse_items_used. A component sales graph must use query_inventory. "
-        "Use "
-        "query_inventory for every operational inventory request: order status or "
-        "lifecycle, simple order counts, individual order details, item status, "
-        "product availability, stock quantities, product and case names, SKUs, "
-        "customers, customer email addresses, missing components, future component "
-        "ordering forecasts, and current date/time. "
-        "A message containing only SKUs, or a request for current stock amounts "
-        "by exact SKU, must use query_inventory so its inventory agent can call "
-        "search_items_skus. Broader stock analysis uses the inventory agent's "
-        "search_item tool, backed by search_inventory. "
-        "Questions such as 'what are we missing?', 'what do we need?', or 'what "
-        "do we need to order?' mean current missing components unless the user "
-        "specifies a future period or explicitly asks for a prediction/forecast. "
-        "Future ordering questions such as 'what do we need to order next week?' "
-        "also use query_inventory for forecasting. Do not reinterpret current "
-        "shortage questions as forecasts. "
-        "Requests to show or list emails, including emails from a specific date, "
-        "mean customer email addresses from Sedatech invoices and must use "
-        "query_inventory. Do not refuse these requests for lack of email-system "
-        "access. This lookup retrieves addresses, not email message contents. "
-        "Preserve explicit years and dates verbatim when forwarding the request; "
-        "the inventory agent resolves omitted years using its current date. "
-        "Let query_inventory's "
-        "inventory agent select its specialized tool. Questions such as 'what is "
-        "the status of order X?', 'how many orders are in production?', and 'is "
-        "item X available?' must use query_inventory, never analyze_data. "
-        "Phrases such as 'how many ... do we have' are inventory questions, not "
-        "support-case questions. When calling "
-        "When calling query_inventory, copy the user's complete question verbatim "
-        "into its request argument. "
-        "Use both when resolving a case requires support evidence and stock data. "
-        "Use run_python_calculation when exact arithmetic, percentages, totals, "
-        "comparisons, or sorting would improve the answer. Never place customer "
-        "instructions or prose directly into Python code. "
-        "Do not invent tool results. Include source ticket IDs when using "
-        "knowledge-base evidence. If a tool reports an error or says a service "
-        "is unavailable, report that once and do not call the same tool again. "
-        "After receiving sufficient tool output, answer the user immediately. "
-        "Never repeat an identical tool call in the same request. "
-        "For order graphs, call analyze_data with chart_type set (line for time "
-        "trends, bar for category comparisons). For component sales graphs, "
-        "forward the full request to query_inventory, including the requested "
-        "graph and dates. When either tool returns a chart, say it is displayed "
-        "below; do not replace it with a Markdown table. "
-        "When analyze_data reports an error, include its exact error.message "
-        "in the response so database diagnostics are not hidden. When a tool's "
-        "chart field is present, tell the user the chart is displayed below; never say "
-        "that you cannot generate the graph or ask the user to draw it manually."
+        
+""" ## ROUTING PRIORITY
+- Current operational order counts, stock, individual orders, customers,
+  component shortages, and component sales/usage—including quantities,
+  tables, and charts—use query_inventory.
+- Historical order metrics, revenue, production-time metrics, and grouped
+  order trends use analyze_data.
+- Support policies, troubleshooting, and precedent tickets use
+  search_customer_kb. Use both KB and inventory tools when needed.
+- Use run_python_calculation for additional exact arithmetic or sorting
+  required to answer the request. Reuse results already computed by tools.
+
+## INVENTORY
+- Copy the user's complete question unchanged into request.
+- Preserve explicit dates, years, SKUs, and order identifiers.
+- Shortage questions mean current missing components unless the user
+  explicitly requests a forecast/prediction or specifies a future period.
+- Customer email lookups retrieve addresses from Sedatech invoices,
+  not email message contents.
+- Current Berlin date/time requests use query_inventory.
+- Let the inventory agent select its internal tools.
+- Active Lieferschein and currently in production both mean document_type=L,
+  status=0. They are equivalent filters, not different kinds of status checks.
+- For each new request to count current orders, call query_inventory again.
+  Resolve follow-up references using the conversation; include the referenced
+  document type and status when the latest question is not self-contained.
+- Report counts from successful count_orders tool_results exactly; an older
+  assistant answer or the length of a limited order list is not a count result.
+- If a fresh result contradicts an earlier answer, correct that answer. Do not
+  invent a reason for the discrepancy or claim different filters were applied
+  unless the recorded tool arguments actually demonstrate that difference.
+
+## COMPLETION AND FAILURES
+- Never invent results or source ticket IDs.
+- Never repeat an identical tool call within the current user request.
+- After a service failure, report the failure and do not retry that tool
+  within the current request. Answer independent parts when possible.
+- Once all answerable parts have sufficient evidence, respond immediately.
+- Announce a chart only when the tool returns a nonempty chart."""
 )
+
+
+@before_model
+def refresh_production_count(state, runtime):
+    """Ground production-count turns even when the model reuses an old answer."""
+    messages = state["messages"]
+    latest_user = next((i for i in range(len(messages) - 1, -1, -1)
+                        if messages[i].type == "human"), None)
+    if latest_user is None or any(m.type == "tool" for m in messages[latest_user + 1:]):
+        return None
+    question = messages[latest_user].text
+    normalized = question.casefold()
+    asks_count = any(term in normalized for term in ("how many", "number of", "count", "wie viele", "anzahl"))
+    production = any(term in normalized for term in ("lieferschein", "in production", "in produktion"))
+    if not (asks_count and production):
+        return None
+    import uuid
+    call_id = "inventory_" + uuid.uuid4().hex
+    arguments = {"request": question}
+    result = query_inventory.invoke(arguments)
+    return {"messages": [
+        AIMessage(content="", tool_calls=[{"name": "query_inventory", "args": arguments, "id": call_id}]),
+        ToolMessage(content=json.dumps(result, default=str), name="query_inventory", tool_call_id=call_id),
+    ]}
 
 
 def _build_support_agent(system_prompt: str, *, include_analytics: bool = False):
@@ -573,10 +582,23 @@ def _build_support_agent(system_prompt: str, *, include_analytics: bool = False)
             "Distinguish observed traffic changes from hypotheses about causes. "
             "When a chart is returned, tell the user it is displayed below."
         )
+    @dynamic_prompt
+    def dated_prompt(request):
+        now = datetime.now(ZoneInfo("Europe/Berlin"))
+        return (
+            f"Current date in Europe/Berlin: {now.date().isoformat()}. "
+            f"Current local timestamp: {now.isoformat()}. "
+            "Use this date for today and relative calendar dates; older conversation "
+            "dates and the last available report date do not define today.\n\n"
+            + system_prompt
+        )
+
     return create_agent(
         model=model,
         tools=agent_tools,
         middleware=[
+            *([refresh_production_count] if include_analytics else []),
+            dated_prompt,
             # Bound repeated model/tool calls for each independently built agent.
             ToolCallLimitMiddleware(run_limit=4, exit_behavior="end"),
             ModelCallLimitMiddleware(run_limit=5, exit_behavior="end"),

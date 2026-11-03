@@ -210,7 +210,7 @@ class SqlServerOrderRepository:
         where_sql = ""
 
         if where_clauses:
-            where_sql = "WHERE " + "Vertreter NOT IN ('23', '0', '28') AND PLZ != '10997' AND Vertrag NOT IN (-1) AND Lager = 100 AND " + " AND ".join(where_clauses)
+            where_sql = "WHERE " + "Vertreter NOT IN ('23', '0', '28') AND PLZ != '10997' AND Vertrag NOT IN (-1) AND Lager = 100 AND Adressnummer != 'K000000' AND " + " AND ".join(where_clauses)
 
         query = f"""
             SELECT TOP {safe_limit}
@@ -317,7 +317,7 @@ class SqlServerOrderRepository:
 
         where_clause = ""
         if conditions:
-            where_clause = "WHERE " + "Vertreter NOT IN ('23', '0', '28') AND PLZ != '10997' AND Vertrag NOT IN (-1) AND Lager = 100 AND " + " AND ".join(conditions)
+            where_clause = "WHERE " + "Vertreter NOT IN ('23', '0', '28') AND PLZ != '10997' AND Vertrag NOT IN (-1) AND Lager = 100 AND Adressnummer != 'K000000' AND " + " AND ".join(conditions)
 
         query = f"""
             SELECT COUNT(*) AS OrderCount

@@ -1,4 +1,5 @@
 httpx
+tzdata
 requests
 fastapi
 uvicorn

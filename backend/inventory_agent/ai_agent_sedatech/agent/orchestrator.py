@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import json
-from datetime import date
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from agent.prompts import SYSTEM_PROMPT
 from agent.state import AgentState
@@ -30,7 +31,7 @@ class SupportAgent:
         state.messages = [
             {
                 "role": "system",
-                "content": f"Today's date is {date.today().isoformat()}.\n\n{SYSTEM_PROMPT}",
+                "content": f"Today's date in Europe/Berlin is {datetime.now(ZoneInfo('Europe/Berlin')).date().isoformat()}.\n\n{SYSTEM_PROMPT}",
             },
             {"role": "user", "content": state.user_request},
         ]
