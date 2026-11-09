@@ -1,0 +1,23 @@
+services:
+  mcp:
+    build: ./backend
+    command: ["python", "mcp_server.py", "--tunnel"]
+    env_file:
+      - ./backend/inventory_agent/ai_agent_sedatech/.env
+      - ./backend/.env
+    environment:
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      QDRANT_URL: ${QDRANT_URL:-http://host.docker.internal:6333}
+      REPOSITORY_BACKEND: sqlserver
+      MCP_TUNNEL_KEY_FILE: /run/secrets/mcp_tunnel_key
+    secrets:
+      - mcp_tunnel_key
+    ports:
+      - "127.0.0.1:8001:8001"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+secrets:
+  mcp_tunnel_key:
+    file: ./.tunnel-client/mcp-key

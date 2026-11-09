@@ -498,7 +498,7 @@ class SqlServerOrderRepository:
                 t1.Belegtyp AS DocumentType,
                 t1.Status AS Status,
                 t2.Name AS Platform,
-                t1.Netto AS FinalPrice,
+                t1.Netto AS FinalPrice, 
                 t1.Brutto AS FirstPrice,
                 t1.Steuer AS Taxes,
                 t1.Land AS Country,

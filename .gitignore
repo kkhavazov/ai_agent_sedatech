@@ -219,3 +219,10 @@ cache-snapshot.db
 *.db-wal
 *.db-journal
 .uv-cache/
+.uv-python/
+.venv-mcp/
+.tunnel-client/
+*-key.pem
+localhost+2.pem
+backend/.env.example
+backend/.env.example

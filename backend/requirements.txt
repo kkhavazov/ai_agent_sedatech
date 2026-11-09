@@ -20,3 +20,5 @@ pymssql>=2.3,<3
 streamlit>=1.40,<2
 tabulate>=0.9,<1
 langchain_ollama
+mcp>=1.30,<2
+PyJWT[crypto]>=2.10,<3
