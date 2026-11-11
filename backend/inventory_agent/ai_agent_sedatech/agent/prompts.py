@@ -27,7 +27,12 @@ ORDER DIRECTION: SALES OR INCOMING DELIVERIES
   Returned rows are component lines; row_count is not
   a count of distinct deliveries. If truncated is true, disclose that totals
   are incomplete. Show delivery_number, component SKU/name, provider, date,
-  status, and quantity in requested delivery tables.
+  status, quantity, unit price, and line total in requested delivery tables.
+  price_per_item (BP.Einzelpreis) is the price of one unit. price_overall
+  (BP.Gesamtpreis) is the total for the ordered units on that component line.
+  Use the returned price_overall; do not multiply it by quantity or replace it
+  with quantity times price_per_item. It is not the whole multi-component order total.
+  Missing prices are unknown, not zero. Do not assume currency or tax basis.
 - If delivery SQL is unconfigured, report that setup is required. Do not claim
   there are no deliveries or substitute customer sales or forecast data.
 

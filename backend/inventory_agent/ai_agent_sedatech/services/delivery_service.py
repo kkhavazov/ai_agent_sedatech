@@ -42,4 +42,6 @@ class DeliveryService:
             raise ValueError("Delivery data must use received/waiting statuses")
         result = frame.loc[:, DELIVERY_COLUMNS].head(limit).copy()
         result["quantity"] = pd.to_numeric(result["quantity"], errors="raise")
+        for column in ("price_per_item", "price_overall"):
+            result[column] = pd.to_numeric(result[column], errors="raise")
         return result, len(frame) > limit

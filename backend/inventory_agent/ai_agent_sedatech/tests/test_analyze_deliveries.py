@@ -30,7 +30,9 @@ def delivery_row(**overrides):
         "delivery_number": "SUP-123", "component_sku": "RAM-16",
         "component_name": "16GB RAM", "provider": "Supplier A",
         "delivery_date": datetime(2026, 11, 9, 14, 30),
-        "status": "received", "quantity": Decimal("3.5"), **overrides,
+        "status": "received", "quantity": Decimal("3.5"),
+        "price_per_item": Decimal("42.75"),
+        "price_overall": Decimal("140.00"), **overrides,
     }
 
 
@@ -63,6 +65,9 @@ def test_delivery_tool_forwards_filters_and_returns_json_table(status):
     assert table["row_count"] == 1
     assert table["truncated"] is False
     assert table["rows"][0]["quantity"] == 3.5
+    assert table["rows"][0]["price_per_item"] == 42.75
+    assert table["rows"][0]["price_overall"] == 140.0
+    assert "price" not in table["columns"]
     assert table["rows"][0]["delivery_date"].startswith("2026-11-09")
     json.dumps(table, allow_nan=False)
 
@@ -197,7 +202,9 @@ def delivery_sql(monkeypatch):
         CREATE TABLE BELEG (Belegnummer TEXT, Belegtyp TEXT, Name TEXT, UebernahmeOffen REAL);
         CREATE TABLE BELEGP (
             Belegnummer TEXT, Belegtyp TEXT, Zeilentyp TEXT, Artikelnummer TEXT,
-            Bezeichnung TEXT, EditMenge REAL, Datum TEXT
+            Bezeichnung TEXT, EditMenge REAL, Datum TEXT,
+            Einzelpreis REAL DEFAULT 42.75,
+            Gesamtpreis REAL DEFAULT 200.0
         );
         CREATE TABLE ART (Artikelnummer TEXT, ArtikelGruppe TEXT, Bezeichnung TEXT);
     """)
@@ -214,7 +221,9 @@ def delivery_sql(monkeypatch):
         ("P4", "B", "Supplier A", None),
         ("P5", "R", "Sales customer", 0),
     ])
-    database.executemany("INSERT INTO BELEGP VALUES (?, ?, ?, ?, ?, ?, ?)", [
+    database.executemany("""INSERT INTO BELEGP
+        (Belegnummer, Belegtyp, Zeilentyp, Artikelnummer, Bezeichnung, EditMenge, Datum)
+        VALUES (?, ?, ?, ?, ?, ?, ?)""", [
         ("P1", "B", "A", "ME-16", "16GB DDR5 6000", 10, "2026-11-01 00:00:00"),
         ("P1", "B", "A", "CP-KF", "Intel Core i9-14900KF", 5, "2026-11-01 00:00:00"),
         ("P2", "B", "A", "CP-K", "Intel Core i9-14900K", 4, "2026-11-09 23:59:59"),
@@ -274,3 +283,15 @@ def test_delivery_sql_applies_limit_after_filtering(delivery_sql):
     assert result["data"]["row_count"] == 1
     assert result["data"]["truncated"] is True
     assert result["data"]["rows"][0]["quantity"] == 5
+    assert result["data"]["rows"][0]["price_per_item"] == 42.75
+    assert result["data"]["rows"][0]["price_overall"] == 200.0
+
+
+@pytest.mark.parametrize("price, expected", [(None, None), (Decimal("0"), 0), (Decimal("12.3456"), 12.3456)])
+@pytest.mark.parametrize("column", ["price_per_item", "price_overall"])
+def test_delivery_price_preserves_missing_zero_and_fractional_values(column, price, expected):
+    repository = DeliveryRepositoryStub([delivery_row(**{column: price})])
+    result = registry_for(repository).execute("analyze_deliveries", {})
+    assert result["success"] is True
+    assert result["data"]["rows"][0][column] == expected
+    json.dumps(result["data"], allow_nan=False)

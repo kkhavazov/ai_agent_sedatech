@@ -9,7 +9,7 @@ DeliveryStatus = Literal["received", "waiting"]
 DeliveryComponent = str | dict[str, Any]
 DELIVERY_COLUMNS = [
     "delivery_number", "component_sku", "component_name", "provider",
-    "delivery_date", "status", "quantity",
+    "delivery_date", "status", "quantity", "price_per_item", "price_overall",
 ]
 
 
@@ -39,6 +39,11 @@ class DeliveryRepository(Protocol):
         UebernahmeOffen >= 0. NULL status values are excluded. Each row represents
         a delivery component line with BP.EditMenge as quantity; the document
         status does not establish a partially received quantity.
+        price_per_item is the price of one unit from BP.Einzelpreis.
+        price_overall is the total for the units on this component order line
+        from BP.Gesamtpreis, not the whole multi-component order. Preserve the
+        database total rather than recalculating it from quantity and unit price.
+        Missing prices remain null; currency and tax basis are not supplied.
         Sort by delivery_date descending, delivery_number, component_sku,
         quantity before applying max_rows. Return the columns even
         when there are no matching rows.

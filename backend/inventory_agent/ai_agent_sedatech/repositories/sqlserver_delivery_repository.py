@@ -21,6 +21,8 @@ SELECT TOP (%s)
     BP.EditMenge AS quantity,
     B.Name AS provider,
     BP.Datum AS delivery_date,
+    BP.Einzelpreis AS price_per_item,
+    BP.Gesamtpreis AS price_overall,
     CASE WHEN B.UebernahmeOffen < 0 THEN 'waiting'
          WHEN B.UebernahmeOffen >= 0 THEN 'received' END AS status
 FROM BELEGP AS BP
