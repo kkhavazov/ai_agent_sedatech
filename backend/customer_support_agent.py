@@ -234,7 +234,8 @@ def query_inventory(request: str) -> dict:
     individual order details, item status, product availability, stock quantities,
     SKUs, cases, customers, customer email addresses from Sedatech invoices,
     missing components, component sales/usage tables and graphs over time,
-    future component ordering forecasts, or the current
+    incoming supplier deliveries (received or waiting), delivery history filtered
+    by components, dates or provider, future component ordering forecasts, or the current
     Berlin date/time. 'What are we missing?' and 'what do we need?' mean current
     missing components. Use forecasts only for explicit predictions/forecasts
     or future ordering needs such as 'what do we need to order next week?'.
@@ -242,7 +243,9 @@ def query_inventory(request: str) -> dict:
     email-address lookups and must use this tool, including date-filtered requests.
     The inventory agent selects the appropriate specialized inventory tool. Pass
     the user's complete original question unchanged, preserving order numbers,
-    product names, model numbers, and SKUs. Do not use analyze_data for
+    product names, model numbers, and SKUs. For follow-up clarifications, also
+    include the original filters and confirmed sales/delivery direction.
+    Do not use analyze_data for
     these operational lookups or component sales analysis. Bare SKUs are stock
     quantity requests; the inventory agent uses search_items_skus for them.
     """
@@ -366,10 +369,11 @@ def analyze_data(
     sort_direction: Literal["asc", "desc"] = "asc",
     limit: int | None = None,
     status: int | None = None,
-    document_type: Literal["A", "D", "L", "R"] | None = "R",
+    document_type: Literal["D", "L", "R"] | None = "R",
     chart_type: Literal["bar", "line", "area", "scatter"] | None = None,
 ) -> dict:
-    """Aggregate order data using selected metrics, groups, and filters. Dates
+    """Aggregate customer sales data using selected metrics, groups, and filters.
+    For incoming supplier deliveries, use query_inventory. Dates
     use YYYY-MM-DD or YYYY-MM. For requests ending today, omit date_to. When
     the user asks for a graph, chart, plot, or visualization, set chart_type.
     Use line for time trends and bar for categorical comparisons.
@@ -497,18 +501,27 @@ def analyze_data(
 SUPPORT_AGENT_SYSTEM_PROMPT = (
         
 """ ## ROUTING PRIORITY
+- Distinguish customer sales orders we sell from incoming supplier deliveries
+  we receive into inventory. Use query_inventory for supplier delivery analysis,
+  including component, date, provider, and received/waiting status filters.
+- If "orders" or "deliveries" leaves the direction unclear, use conversation
+  context; if still unclear, ask whether the user means customer sales orders
+  or incoming supplier deliveries and wait before querying either type.
+  Resolve follow-up answers into a self-contained request with the confirmed
+  direction and original filters before calling query_inventory.
 - Current operational order counts, stock, individual orders, customers,
   component shortages, and component sales/usage—including quantities,
   tables, and charts—use query_inventory.
-- Historical order metrics, revenue, production-time metrics, and grouped
-  order trends use analyze_data.
+- Historical customer sales metrics, revenue, production-time metrics, and
+  grouped customer sales trends use analyze_data.
 - Support policies, troubleshooting, and precedent tickets use
   search_customer_kb. Use both KB and inventory tools when needed.
 - Use run_python_calculation for additional exact arithmetic or sorting
   required to answer the request. Reuse results already computed by tools.
 
 ## INVENTORY
-- Copy the user's complete question unchanged into request.
+- Copy the user's complete question unchanged into request, adding resolved
+  conversation context when needed for a follow-up clarification.
 - Preserve explicit dates, years, SKUs, and order identifiers.
 - Shortage questions mean current missing components unless the user
   explicitly requests a forecast/prediction or specifies a future period.

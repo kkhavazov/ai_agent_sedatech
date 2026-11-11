@@ -56,8 +56,8 @@ class SqlServerItemRepository(ItemRepository):
             timeout=self.query_timeout_seconds,
         )
 
+    @staticmethod
     def _build_article_filters(
-        self,
         *,
         sku: str | None = None,
         category: str | None = None,

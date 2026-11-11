@@ -6,6 +6,8 @@ from tools.email_tools import build_get_emails_tool
 from repositories.sqlserver_items_compatability_repository import SqlServerItemsCompatabilityRepository
 from tools.items.items_compatability import build_items_compatability_tool
 from services.order_service import OrderService
+from services.delivery_service import DeliveryService
+from tools.analyze_deliveries import build_analyze_deliveries_tool
 from services.item_service import ItemService
 from services.missing_service import MissingComponentService
 from tools.registry import ToolDefinition, ToolRegistry
@@ -52,8 +54,10 @@ def build_tool_registry(
     missing_component_service: MissingComponentService | None = None,
     emails_repository: SqlServerEmailsRepository | None = None,
     items_compatability_repository: SqlServerItemsCompatabilityRepository | None = None,
+    delivery_service: DeliveryService | None = None,
 ) -> ToolRegistry:
     registry = ToolRegistry()
+    registry.register(build_analyze_deliveries_tool(delivery_service or DeliveryService()))
     if items_compatability_repository is not None:
         registry.register(build_items_compatability_tool(items_compatability_repository))
     if emails_repository is not None:
@@ -63,8 +67,9 @@ def build_tool_registry(
         ToolDefinition(
             name="filter_orders",
             description=(
-                "Search and return order documents using order lifecycle filters. "
-                "A business order progresses through A -> D -> L -> R, and may have "
+                "Search and return customer sales order documents using order lifecycle filters. "
+                "For incoming supplier deliveries use analyze_deliveries. "
+                "A business order progresses through D -> L -> R, and may have "
                 "multiple database document rows. "
                 "Use lifecycle_state for current operational states. "
                 "Ready for shipment, invoiced, or sent = lifecycle_state='ready_or_sent', "
@@ -87,12 +92,14 @@ def build_tool_registry(
         ToolDefinition(
             name="analyze_data",
             description=(
-                "Return row-level order data for analysis, grouping, trends, "
+                "Analyze customer sales orders, not incoming supplier deliveries. "
+                "For incoming supplier deliveries use analyze_deliveries. "
+                "Return order data for analysis, grouping, trends, "
                 "revenue calculations, and breakdowns by platform, country, "
                 "status, or date. Use lifecycle_state for current operational "
-                "stages: created_unconfirmed=A/0, confirmed_workshop=D/0, "
+                "stages: confirmed_workshop=D/0, "
                 "in_production=L/0, ready_or_sent=R/0. For historical stage "
-                "activity use document_type without status; completed A, D, or L "
+                "activity use document_type without status; completed D or L "
                 "stages use status=2. Prefer count_orders for a simple count and "
                 "filter_orders when order identities or details are requested."
             ),
@@ -104,10 +111,11 @@ def build_tool_registry(
         ToolDefinition(
             name="count_orders",
             description=(
-                "Count orders or order documents matching lifecycle, customer, order "
-                "number, or date filters. "
+                "Count customer sales orders or documents matching lifecycle, customer, "
+                "order number, or date filters. "
+                "For incoming supplier deliveries use analyze_deliveries. "
                 "Use lifecycle_state for current operational counts. "
-                "Examples: unconfirmed = A/0; confirmed workshop = D/0; "
+                "Examples: confirmed workshop = D/0; "
                 "currently in production = L/0; ready, invoiced, or sent = R/0. "
                 "When searching whether orders entered a stage historically, filter "
                 "by document_type without requiring status 0. "

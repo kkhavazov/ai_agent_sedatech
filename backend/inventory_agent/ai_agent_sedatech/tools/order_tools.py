@@ -64,7 +64,7 @@ def build_get_order_tool(service: OrderService) -> ToolDefinition:
     return ToolDefinition(
         name="get_order",
         description=(
-            "Retrieve an order by its exact order number, including its current "
+            "Retrieve a customer sales order by its exact order number, including its current "
             "status, date, customer information, ordered computers, standalone items, "
             "and the components installed in each computer."
         ),

@@ -95,7 +95,7 @@ class SqlServerOrderRepository:
             else ""
         )
 
-        allowed_item_types = {"A", "D", "L", "R"}
+        allowed_item_types = {"D", "L", "R"}
 
         items: list[OrderItem] = []
 
@@ -473,12 +473,6 @@ class SqlServerOrderRepository:
         if status is not None:
             conditions.append("t1.Status = %s")
             parameters.append(status)
-            # if status == "R":
-            #     conditions.append("t1.Vertreter NOT IN ('12', '15', '17', '42', '43', '44', '45')")
-            # elif status == "A":
-            #     pass
-            # else:
-            #     conditions.append("t1.Vertreter NOT IN ('23', '0', '28') AND t1.PLZ != '10997'")
         if date_from is not None:
             conditions.append("t1.AngelegtAm >= %s")
             parameters.append(date_from)

@@ -14,6 +14,8 @@ from repositories.sqlserver_emails_repository import SqlServerEmailsRepository
 from repositories.sqlserver_items_compatability_repository import SqlServerItemsCompatabilityRepository
 from repositories.sqlserver_missing_repository import SqlServerMissingRepository
 from repositories.sqlserver_order_repository import SqlServerOrderRepository
+from repositories.sqlserver_delivery_repository import SqlServerDeliveryRepository
+from services.delivery_service import DeliveryService
 from services.item_service import ItemService
 from services.missing_service import MissingComponentService
 from services.order_service import OrderService
@@ -77,7 +79,18 @@ def build_agent(settings: Settings | None = None) -> SupportAgent:
     missing_component_service = None
     emails_repository = None
     items_compatability_repository = None
+    delivery_service = DeliveryService()
     if settings.repository_backend == "sqlserver":
+        delivery_service = DeliveryService(SqlServerDeliveryRepository(
+            server=settings.sqlserver_server,
+            user=settings.sqlserver_user,
+            password=settings.sqlserver_password,
+            database=settings.sqlserver_database,
+            tds_version=settings.sqlserver_tds_version,
+            port=settings.sqlserver_port,
+            login_timeout_seconds=settings.sqlserver_login_timeout_seconds,
+            query_timeout_seconds=settings.sqlserver_query_timeout_seconds,
+        ))
         emails_repository = SqlServerEmailsRepository(
             server=settings.sqlserver_server,
             user=settings.sqlserver_user,
@@ -121,6 +134,7 @@ def build_agent(settings: Settings | None = None) -> SupportAgent:
         missing_component_service,
         emails_repository=emails_repository,
         items_compatability_repository=items_compatability_repository,
+        delivery_service=delivery_service,
     )
 
 

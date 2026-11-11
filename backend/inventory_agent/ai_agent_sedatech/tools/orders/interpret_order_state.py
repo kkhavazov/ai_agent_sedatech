@@ -3,20 +3,6 @@ def interpret_order_state(
     status: int,
 ) -> dict[str, str | bool]:
     state_map = {
-        ("A", 0): {
-            "document_type_label": "Created order",
-            "document_status_label": "Active",
-            "lifecycle_state": "created_unconfirmed",
-            "lifecycle_label": "Created but not confirmed",
-            "is_current_stage": True,
-        },
-        ("A", 2): {
-            "document_type_label": "Created order",
-            "document_status_label": "Completed",
-            "lifecycle_state": "created_stage_completed",
-            "lifecycle_label": "Initial order stage completed",
-            "is_current_stage": False,
-        },
         ("D", 0): {
             "document_type_label": "Werkstattschein",
             "document_status_label": "Active",

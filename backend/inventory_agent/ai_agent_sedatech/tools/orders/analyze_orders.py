@@ -25,7 +25,7 @@ class AnalyzeDataArguments(BaseModel):
     filters: dict[str, str | int | float | bool] = Field(default_factory=dict)
     date_from: date | None = None
     date_to: date | None = None
-    document_type: Literal["A", "D", "L", "R"] | None = "R"
+    document_type: Literal["D", "L", "R"] | None = "R"
     status: int | None = Field(default=None, ge=0)
     sort_by: str | None = None
     sort_direction: Literal["asc", "desc"] = "asc"
@@ -99,7 +99,7 @@ def create_analyze_data_handler(order_service: OrderService):
         filters: dict[str, str | int | float | bool] | None = None,
         date_from: date | None = None,
         date_to: date | None = None,
-        document_type: Literal["A", "D", "L", "R"] | None = "R",
+        document_type: Literal["D", "L", "R"] | None = "R",
         status: int | None = None,
         sort_by: str | None = None,
         sort_direction: Literal["asc", "desc"] = "asc",

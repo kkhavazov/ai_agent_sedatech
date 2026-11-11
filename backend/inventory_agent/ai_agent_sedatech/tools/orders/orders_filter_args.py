@@ -6,11 +6,10 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field, model_validator
 
 
-DocumentType = Literal["A", "D", "L", "R"]
+DocumentType = Literal["D", "L", "R"]
 DocumentStatus = Literal["0", "2"]
 
 LifecycleState = Literal[
-    "created_unconfirmed",
     "confirmed_workshop",
     "in_production",
     "ready_or_sent",
@@ -18,7 +17,6 @@ LifecycleState = Literal[
 
 
 LIFECYCLE_FILTERS = {
-    "created_unconfirmed": ("A", "0"),
     "confirmed_workshop": ("D", "0"),
     "in_production": ("L", "0"),
     "ready_or_sent": ("R", "0"),
@@ -52,7 +50,6 @@ class OrderFiltersArguments(BaseModel):
         default=None,
         description=(
             "Current operational lifecycle state. "
-            "'created_unconfirmed' maps to A with status 0. "
             "'confirmed_workshop' maps to D with status 0. "
             "'in_production' maps to L with status 0. "
             "'ready_or_sent' maps to R with status 0. "
@@ -73,7 +70,6 @@ class OrderFiltersArguments(BaseModel):
         default=None,
         description=(
             "Raw database document type. "
-            "'A' = created order, "
             "'D' = confirmed Werkstattschein, "
             "'L' = Lieferschein / production stage, "
             "'R' = Rechnung / final stage."
@@ -84,7 +80,7 @@ class OrderFiltersArguments(BaseModel):
         default=None,
         description=(
             "Raw status of the selected document stage. "
-            "For A, D, and L: 0 means active and 2 means completed. "
+            "For D and L: 0 means active and 2 means completed. "
             "For R, status normally remains 0."
         ),
     )
