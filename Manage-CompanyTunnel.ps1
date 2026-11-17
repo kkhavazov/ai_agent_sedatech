@@ -72,6 +72,24 @@ switch ($Action) {
             try { $env:CONTROL_PLANE_API_KEY = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($pointer) }
             finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($pointer) }
             $script:mcpSecret = [IO.File]::ReadAllText($mcpSecretPath).Trim()
+            # Docker may still be starting at sign-in. The tunnel disables polling
+            # if its initial MCP discovery fails, so wait for a real handshake.
+            $probeHeaders = @{
+                'X-Company-Tunnel-Key' = $script:mcpSecret
+                Accept = 'application/json, text/event-stream'
+            }
+            $probeBody = '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"tunnel-startup","version":"1"}}}'
+            Write-TunnelLog 'Waiting for the local MCP server before starting the tunnel.'
+            while ($true) {
+                try {
+                    $probe = Invoke-WebRequest -UseBasicParsing -Uri 'http://127.0.0.1:8001/mcp' -Method Post -Headers $probeHeaders -ContentType 'application/json' -Body $probeBody -TimeoutSec 10
+                    $probeResult = $probe.Content | ConvertFrom-Json
+                    if ($probeResult.result.serverInfo) { break }
+                } catch {
+                    # Retry without logging response contents or credentials.
+                }
+                Start-Sleep -Seconds 5
+            }
             Write-TunnelLog 'Starting tunnel-client under Task Scheduler.'
             # Native stderr is diagnostic output, not a terminating PowerShell error.
             $ErrorActionPreference = 'Continue'

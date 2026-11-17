@@ -34,7 +34,7 @@ def build_find_missing_components_tool(
     return ToolDefinition(
         name="find_missing_components",
         description=(
-            "Return components and quantities currently missing for one exact "
+            "Return component IDs, names, and quantities currently missing for one exact "
             "order. Use for 'what is missing for order X?' or 'what do we need "
             "for order X?' when an order number is given. For predicted future "
             "inventory needs, use forecast_components."
@@ -62,7 +62,7 @@ def build_find_open_order_missing_components_tool(
     return ToolDefinition(
         name="find_missing_components_for_open_orders",
         description=(
-            "Return components and quantities currently missing across all open "
+            "Return component IDs, names, and quantities currently missing across all open "
             "orders. Default tool for 'what are we missing?', 'what components "
             "are missing?', 'what do we need?', or 'what do we need to order?' "
             "without a specific order number or future period. The user does "

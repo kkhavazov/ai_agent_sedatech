@@ -12,6 +12,7 @@ ORDERED_AMOUNT_DESCRIPTION = (
 class MissingComponentEntry(TypedDict):
     ID: str
     count: int
+    name: str
 
 @dataclass(slots=True)
 class MissingComponent:

@@ -26,6 +26,7 @@ def compare_dict_lists(
     dict_1 = defaultdict(int)
     dict_2 = defaultdict(int)
     original_ids = {}  # Keeps track of an original ID for each group
+    original_names = {}
 
     # Aggregate list 1 and store a representative original ID
     for item in list_1:
@@ -34,6 +35,7 @@ def compare_dict_lists(
         dict_1[group] += item[count_key]
         if group not in original_ids:
             original_ids[group] = orig_id
+            original_names[group] = item.get("name") or ""
 
     # Aggregate list 2 and store a representative original ID if not already tracked
     for item in list_2:
@@ -42,6 +44,7 @@ def compare_dict_lists(
         dict_2[group] += item[count_key]
         if group not in original_ids:
             original_ids[group] = orig_id
+            original_names[group] = item.get("name") or ""
 
     result: list[MissingComponentEntry] = []
     #all_groups = set(dict_1.keys()).union(set(dict_2.keys()))
@@ -54,7 +57,7 @@ def compare_dict_lists(
         if c2 > c1:
             diff = c2 - c1
             rep_id = original_ids[group]
-            result.append({id_key: rep_id, count_key: diff})
+            result.append({id_key: rep_id, count_key: diff, "name": original_names[group]})
 
     return result
 
@@ -105,13 +108,13 @@ class SqlServerMissingRepository(MissingRepository):
             WHERE Belegnummer = %s
         """
         query_auge = """
-            SELECT Artikelnummer AS ID, Menge AS count
+            SELECT Artikelnummer AS ID, Menge AS count, t1.Bezeichnung AS name
             FROM BELEGP t1
             INNER JOIN BELEG AS t2 ON t1.Belegnummer = t2.Belegnummer
             WHERE t1.Belegnummer = %s
         """
         query_order = """
-            SELECT Artikelnummer AS ID, Menge AS count
+            SELECT Artikelnummer AS ID, Menge AS count, Bezeichnung AS name
             FROM BELEGP
             WHERE Belegnummer = %s
             """

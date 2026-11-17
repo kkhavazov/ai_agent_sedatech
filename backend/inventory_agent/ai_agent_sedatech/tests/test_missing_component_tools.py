@@ -15,7 +15,7 @@ class StubMissingRepository(MissingRepository):
         if order_number == "LS100":
             return MissingComponent(
                 order_number,
-                [{"ID": "CP123", "count": 1}],
+                [{"ID": "CP123", "name": "Processor", "count": 1}],
             )
         return None
 
@@ -26,11 +26,11 @@ class StubMissingRepository(MissingRepository):
             MissingComponent(
                 "LS100",
                 [
-                    {"ID": "CP123", "count": 1},
-                    {"ID": "ME456", "count": 2},
+                    {"ID": "CP123", "name": "Processor", "count": 1},
+                    {"ID": "ME456", "name": "Memory", "count": 2},
                 ],
             ),
-            MissingComponent("LS200", [{"ID": "MB789", "count": 1}]),
+            MissingComponent("LS200", [{"ID": "MB789", "name": "Motherboard", "count": 1}]),
         ]
 
 
@@ -45,7 +45,7 @@ def test_find_missing_components_tool_serializes_results() -> None:
         "has_missing_components": True,
         "missing_components": {
             "order_number": "LS100",
-            "components": [{"ID": "CP123", "count": 1}],
+            "components": [{"ID": "CP123", "name": "Processor", "count": 1}],
         },
     }
 
@@ -69,3 +69,6 @@ def test_open_order_tool_groups_affected_orders() -> None:
     assert result["affected_order_count"] == 2
     assert result["affected_orders"] == ["LS100", "LS200"]
     assert len(result["missing_components"]) == 2
+
+    assert result["missing_components"][0]["components"][0]["name"] == "Processor"
+    assert result["missing_components"][1]["components"][0]["name"] == "Motherboard"
