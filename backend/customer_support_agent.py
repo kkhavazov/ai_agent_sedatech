@@ -241,6 +241,8 @@ def query_inventory(request: str) -> dict:
     or future ordering needs such as 'what do we need to order next week?'.
     Requests such as 'show me emails from 10th of September 2026' are customer
     email-address lookups and must use this tool, including date-filtered requests.
+    IDs with exactly two letters followed by six digits (e.g. RA171165) are
+    order/document numbers; use this tool even for a bare ID.
     The inventory agent selects the appropriate specialized inventory tool. Pass
     the user's complete original question unchanged, preserving order numbers,
     product names, model numbers, and SKUs. For follow-up clarifications, also
@@ -523,6 +525,13 @@ SUPPORT_AGENT_SYSTEM_PROMPT = (
 - Copy the user's complete question unchanged into request, adding resolved
   conversation context when needed for a follow-up clarification.
 - Preserve explicit dates, years, SKUs, and order identifiers.
+- An ID of two letters followed by six digits (e.g. RA171165) is an
+  order/document lookup, including when provided alone. Use query_inventory.
+- In order results, tracking_number is a delivery tracking identifier and
+  tax_number is USt-IdNr. (VAT identification number). date_created is the
+  returned document's creation date; for document_type R it is when it was
+  sent. Treat tax_number, tracking_number, company_name, email, phone_number
+  and language as text or null, preserving leading zeros and formatting.
 - Shortage questions mean current missing components unless the user
   explicitly requests a forecast/prediction or specifies a future period.
 - Customer email lookups retrieve addresses from Sedatech invoices,

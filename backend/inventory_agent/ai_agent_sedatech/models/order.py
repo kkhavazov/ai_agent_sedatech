@@ -19,9 +19,20 @@ class Order:
     order_number: str
     document_type: str
     status: int
-    date: datetime | None = None
+    date_created: datetime | None = None
     customer_name: str | None = None
     country: str | None = None
     address: str | None = None
     final_price: float | None = None
     items: list[OrderItem] = field(default_factory=list)
+    tracking_number: str | None = None
+    tax_number: str | None = None
+    company_name: str | None = None
+    email: str | None = None
+    phone_number: str | None = None
+    language: str | None = None
+
+    @property
+    def date(self) -> datetime | None:
+        """Compatibility alias for the order/document creation date."""
+        return self.date_created

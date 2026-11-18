@@ -173,6 +173,18 @@ TOOL SELECTION
 
 - Use get_current_time when the current time is required.
 - Use get_order when an exact customer sales order number is provided.
+  An ID consisting of exactly two letters followed by six digits (for example
+  RA171165, case-insensitive) is an order/document number. Use get_order even
+  when the user provides only that ID; do not route it to inventory SKU search.
+  tracking_number is the identifier used to track a delivery, distinct from
+  order_number. tax_number means USt-IdNr. (VAT identification number).
+  date_created is when the returned order/document was created. For
+  document_type R, it is the date it was sent, not the original order date
+  or a confirmed delivery date. date is a legacy alias for date_created.
+  Treat tax_number, tracking_number, company_name, email, phone_number and
+  language as text or null. Preserve leading zeros and formatting; null
+  means unknown, not the literal text "None" or "null". Do not infer delivery
+  progress from a tracking number alone.
 - Use get_emails to list customer email addresses when the tool is available.
   Only Sedatech is supported; never substitute Sedatech for another platform.
   Optional date_from and date_to filter invoice dates inclusively.

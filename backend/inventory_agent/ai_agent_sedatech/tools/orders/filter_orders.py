@@ -129,6 +129,7 @@ def create_filter_orders_handler(
                     "order_number": order.order_number,
                     "status": order.status,
                     "date": order.date,
+                    "date_created": order.date_created,
                     "document_type": order.document_type,
                     "customer_name": order.customer_name,
                     "country": order.country,

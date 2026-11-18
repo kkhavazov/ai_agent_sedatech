@@ -16,7 +16,7 @@ class OrderService:
         self.repository = repository
 
     def get_order(self, order_number: str) -> Order:
-        normalized = order_number.strip()
+        normalized = order_number.strip().upper()
         if not normalized:
             raise ValueError("order_number cannot be empty")
 

@@ -1,16 +1,13 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from datetime import date
+from typing import Any, Literal
 
 import pymssql
 
 from models.order import Order, OrderItem
 from repositories.order_repository import OrderRepository
-
-from datetime import date, datetime
-from typing import Any
-
 
 logger = logging.getLogger(__name__)
 
@@ -56,12 +53,18 @@ class SqlServerOrderRepository:
             SELECT TOP 1
                 Belegnummer,
                 Belegtyp,
+                IhrAuftrag AS tracking_number,
+                FreierText1 AS tax_number,
+                Sprache AS language,
                 Status,
-                AngelegtAm,
+                AngelegtAm AS date_created,
                 Name,
                 Vorname,
-                EuroBrutto,
-                Land
+                _FIRMENNAME AS company_name,
+                _EMAIL1 as email,
+                _MOBILNUMMER as phone_number,
+                EuroBrutto AS price,
+                Land AS country
             FROM dbo.BELEG
             WHERE Belegnummer = %s
             ORDER BY AngelegtAm DESC
@@ -118,6 +121,10 @@ class SqlServerOrderRepository:
             part for part in [first_name, last_name] if part
         ) or None
 
+        def optional_text(column: str) -> str | None:
+            value = row.get(column)
+            return str(value).strip() if value is not None else None
+
         return Order(
             order_number=str(row["Belegnummer"]).strip(),
             document_type=belegtyp,
@@ -126,14 +133,18 @@ class SqlServerOrderRepository:
                 if row.get("Status") is not None
                 else ""
             ),
-            date=row.get("AngelegtAm"),
+            date_created=row.get("date_created"),
             customer_name=customer_name,
-            country=(
-                str(row["Land"]).strip()
-                if row.get("Land") is not None
-                else None
+            country=optional_text("country"),
+            final_price=(
+                float(row["price"]) if row.get("price") is not None else None
             ),
-            final_price = row.get("EuroBrutto"),
+            tracking_number=optional_text("tracking_number"),
+            tax_number=optional_text("tax_number"),
+            company_name=optional_text("company_name"),
+            email=optional_text("email"),
+            phone_number=optional_text("phone_number"),
+            language=optional_text("language"),
             items=items,
         )
     def filter_orders(
@@ -269,7 +280,7 @@ class SqlServerOrderRepository:
                 order_number=str(row["OrderNumber"]),
                 document_type=str(row["DocumentType"]),
                 status=int(row["OrderStatus"]),
-                date=row.get("CreationDate"),
+                date_created=row.get("CreationDate"),
                 customer_name=(
                     str(row["CustomerName"])
                     if row.get("CustomerName") is not None
