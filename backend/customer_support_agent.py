@@ -359,8 +359,8 @@ def _build_temporal_chart(frame, request: str) -> dict | None:
 @tool
 def analyze_data(
     metrics: list[Literal[
-        "revenue", "order_count", "average_production_time"
-    ]] = ["revenue", "order_count", "average_production_time"],
+        "revenue", "order_count"
+    ]] = ["revenue", "order_count"],
     group_by: list[Literal[
         "week", "day", "year", "month", "platform", "country", "city", "postcode"
     ]] = ["year", "month"],
@@ -519,7 +519,7 @@ SUPPORT_AGENT_SYSTEM_PROMPT = (
 - Current operational order counts, stock, individual orders, customers,
   component shortages, and component sales/usage—including quantities,
   tables, and charts—use query_inventory.
-- Historical customer sales metrics, revenue, production-time metrics, and
+- Historical customer sales metrics, revenue, and
   grouped customer sales trends use analyze_data.
 - Support policies, troubleshooting, and precedent tickets use
   search_customer_kb. Use both KB and inventory tools when needed.

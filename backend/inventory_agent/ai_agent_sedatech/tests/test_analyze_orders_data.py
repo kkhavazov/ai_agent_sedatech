@@ -18,7 +18,6 @@ class AnalyzeRepository:
             "CreatedAt": datetime(2026, 8, 21, 12, 30),
             "FinalPrice": 1499.0,
             "Country": "DE",
-            "ProductionTime": 3.0,
         }])
 
 

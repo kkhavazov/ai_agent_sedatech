@@ -8,14 +8,14 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field, ValidationInfo, field_validator, model_validator
 
 from services.order_service import OrderService
-Metric = Literal["revenue", "order_count", "average_production_time"]
+Metric = Literal["revenue", "order_count"]
 GroupBy = Literal["year", "month", "week", "day", "platform", "country", "city", "postcode"]
 
 
 class AnalyzeDataArguments(BaseModel):
     metrics: list[Metric] = Field(
         default_factory=lambda: [
-            "revenue", "order_count", "average_production_time"
+            "revenue", "order_count"
         ], min_length=1,
         description="Select only the requested metrics; do not request unrelated metrics.",
     )

@@ -518,8 +518,7 @@ class SqlServerOrderRepository:
                 t1.Steuer AS Taxes,
                 t1.Land AS Country,
                 t1.Plz AS Postcode,
-                t1.Ort AS City,
-                DATEDIFF(hour, t1.AngelegtAm, t1.BearbeitetAm) AS DateDiff
+                t1.Ort AS City
             FROM dbo.BELEG as t1
             INNER JOIN dbo.MITARBW AS t2 ON t1.Vertreter = t2.Nr
             {where_clause}
@@ -538,7 +537,6 @@ class SqlServerOrderRepository:
                 "CreatedAt", "CustomerNumber", "DocumentType", "Status",
                 "Platform", "FinalPrice", "FirstPrice", "Taxes",
                 "Country", "Postcode", "City",
-                "ProductionTime",
             ]
             return pd.DataFrame.from_records(rows, columns=columns)
 

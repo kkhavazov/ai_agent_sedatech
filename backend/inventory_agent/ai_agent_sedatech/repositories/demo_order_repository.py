@@ -106,7 +106,6 @@ class DemoOrderRepository(OrderRepository):
                 "Country": None,
                 "Postcode": None,
                 "City": None,
-                "ProductionTime": None,
             }
             for order in self._orders.values()
             if (document_type is None or order.document_type == document_type)

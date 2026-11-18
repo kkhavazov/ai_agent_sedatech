@@ -165,10 +165,6 @@ class OrderService:
             aggregations["revenue"] = ("FinalPrice", "sum")
         if "order_count" in metrics:
             aggregations["order_count"] = ("CreatedAt", "size")
-        if "average_production_time" in metrics:
-            if "ProductionTime" not in frame.columns:
-                raise ValueError("average_production_time is not available in the order data source")
-            aggregations["average_production_time"] = ("ProductionTime", "mean")
 
         if group_by:
             result = frame.groupby(group_by, dropna=False).agg(**aggregations).reset_index()

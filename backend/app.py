@@ -83,7 +83,7 @@ def extract_analysis_chart(result: dict, prompt: str = "") -> dict | None:
         if not chart_requested or not isinstance(rows, list) or not rows:
             continue
         metrics = [
-            key for key in ("revenue", "order_count", "average_production_time")
+            key for key in ("revenue", "order_count")
             if any(isinstance(row.get(key), (int, float)) for row in rows)
         ]
         groups = [
