@@ -16,7 +16,7 @@ class OrderItem:
 
 @dataclass(slots=True)
 class Order:
-    order_number: str
+    document_number: str
     document_type: str
     status: int
     date_created: datetime | None = None
@@ -31,6 +31,8 @@ class Order:
     email: str | None = None
     phone_number: str | None = None
     language: str | None = None
+    platform: str | None = None
+    order_number: str | None = None
 
     @property
     def date(self) -> datetime | None:

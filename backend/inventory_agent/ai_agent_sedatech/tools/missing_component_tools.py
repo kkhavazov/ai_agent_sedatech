@@ -12,7 +12,7 @@ class FindMissingComponentsArguments(BaseModel):
     order_number: str = Field(
         min_length=1,
         max_length=50,
-        description="The exact order number to check",
+        description="The exact internal document number (Belegnummer) to check; use document_number from order results, not the external order_number.",
     )
 
 

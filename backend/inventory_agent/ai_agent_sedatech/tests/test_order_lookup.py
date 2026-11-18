@@ -7,12 +7,13 @@ import pytest
 from repositories.sqlserver_order_repository import SqlServerOrderRepository
 from services.order_service import OrderService
 from tools.order_tools import build_get_order_tool
+from tools.orders.filter_orders import create_filter_orders_handler
 from tools.registry import ToolRegistry
 
 
 TEXT_FIELDS = (
     "tax_number", "tracking_number", "company_name", "email",
-    "phone_number", "language",
+    "phone_number", "language", "platform", "order_number",
 )
 
 
@@ -43,6 +44,8 @@ def order_row():
         "tracking_number": "001234567890", "tax_number": "DE001234567",
         "company_name": "Example GmbH", "email": "ada@example.com",
         "phone_number": "+49 030 012345", "language": "DE",
+        "platform": "Amazon",
+        "order_number": "001-1234567-1234567",
     }
 
 
@@ -52,7 +55,9 @@ def test_order_lookup_maps_sql_aliases_and_preserves_text_and_components():
 
     assert result["success"] is True
     data = result["data"]
-    assert data["order_number"] == "RA171165"
+    assert data["document_number"] == "RA171165"
+    assert data["order_number"] != data["document_number"]
+    assert data["order_number"] != data["tracking_number"]
     assert data["document_type"] == "R"
     assert data["date_created"] == row["date_created"]
     assert data["date"] == data["date_created"]
@@ -63,7 +68,12 @@ def test_order_lookup_maps_sql_aliases_and_preserves_text_and_components():
         assert data[field] == row[field]
     assert data["items"][0]["components"][0]["sku"] == "CP001"
     query, parameters = cursor.execute.call_args_list[0].args
-    assert "WHERE Belegnummer = %s" in query
+    assert "WHERE t1.Belegnummer = %s" in query
+    assert "t1.Name," in query
+    assert "t2.Name AS platform" in query
+    assert "t1._TRACKING AS tracking_number" in query
+    assert "t1.IhrAuftrag AS order_number" in query
+    assert "LEFT JOIN dbo.MITARBW AS t2 ON t1.Vertreter = t2.Nr" in query
     assert parameters == ("RA171165",)
     assert cursor.execute.call_args_list[1].args[1] == ("RA171165",)
 
@@ -78,6 +88,7 @@ def test_order_lookup_returns_optional_fields_as_text_or_null(value):
 
     assert result["success"] is True
     data = result["data"]
+    assert data["document_number"] == "RA171165"
     for field in TEXT_FIELDS:
         assert data[field] == (None if value is None else str(value))
     assert data["date_created"] is None
@@ -91,3 +102,38 @@ def test_missing_order_keeps_not_found_behavior():
     assert result["success"] is False
     assert result["error"]["code"] == "NOT_FOUND"
     assert cursor.execute.call_count == 1
+
+
+@pytest.mark.parametrize("external_reference", ["001-1234567-1234567", None])
+def test_filtered_order_can_be_looked_up_by_document_number(external_reference):
+    row = order_row()
+    row["order_number"] = external_reference
+    cursor = Mock()
+    cursor.fetchall.side_effect = [[{
+        "DocumentNumber": "RA171165", "OrderNumber": external_reference,
+        "DocumentType": "R", "OrderStatus": 0,
+        "CreationDate": row["date_created"], "CustomerName": "Ada Example",
+        "Country": "DE", "Address": "Example Street", "FinalPrice": row["price"],
+    }], []]
+    cursor.fetchone.return_value = row
+    connection = Mock()
+    connection.cursor.return_value = cursor
+    repository = SqlServerOrderRepository("server", "user", "password", "database")
+    repository._connect = Mock(return_value=connection)
+    service = OrderService(repository)
+
+    filtered = create_filter_orders_handler(service)(document_type="R", limit=1)
+    document = filtered["orders"][0]
+    assert document["document_number"] == "RA171165"
+    assert document["order_number"] == external_reference
+    query = cursor.execute.call_args_list[0].args[0]
+    assert "Belegnummer AS DocumentNumber" in query
+    assert "IhrAuftrag AS OrderNumber" in query
+
+    result = build_get_order_tool(service).handler(
+        order_number=document["document_number"]
+    )
+    assert result["document_number"] == "RA171165"
+    assert result["order_number"] == external_reference
+    assert cursor.execute.call_args_list[1].args[1] == ("RA171165",)
+    assert cursor.execute.call_args_list[2].args[1] == ("RA171165",)

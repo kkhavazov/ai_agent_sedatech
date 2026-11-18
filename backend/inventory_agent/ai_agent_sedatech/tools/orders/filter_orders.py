@@ -126,6 +126,7 @@ def create_filter_orders_handler(
             },
             "orders": [
                 {
+                    "document_number": order.document_number,
                     "order_number": order.order_number,
                     "status": order.status,
                     "date": order.date,

@@ -51,23 +51,26 @@ class SqlServerOrderRepository:
     def find_by_order_number(self, order_number: str) -> Order | None:
         query = """
             SELECT TOP 1
-                Belegnummer,
-                Belegtyp,
-                IhrAuftrag AS tracking_number,
-                FreierText1 AS tax_number,
-                Sprache AS language,
-                Status,
-                AngelegtAm AS date_created,
-                Name,
-                Vorname,
-                _FIRMENNAME AS company_name,
-                _EMAIL1 as email,
-                _MOBILNUMMER as phone_number,
-                EuroBrutto AS price,
-                Land AS country
-            FROM dbo.BELEG
-            WHERE Belegnummer = %s
-            ORDER BY AngelegtAm DESC
+                t1.Belegnummer,
+                t1.Belegtyp,
+                t1._TRACKING AS tracking_number,
+                t1.IhrAuftrag AS order_number,
+                t1.FreierText1 AS tax_number,
+                t2.Name AS platform,
+                t1.Sprache AS language,
+                t1.Status,
+                t1.AngelegtAm AS date_created,
+                t1.Name,
+                t1.Vorname,
+                t1._FIRMENNAME AS company_name,
+                t1._EMAIL1 AS email,
+                t1._MOBILNUMMER AS phone_number,
+                t1.EuroBrutto AS price,
+                t1.Land AS country
+            FROM dbo.BELEG AS t1
+            LEFT JOIN dbo.MITARBW AS t2 ON t1.Vertreter = t2.Nr
+            WHERE t1.Belegnummer = %s
+            ORDER BY t1.AngelegtAm DESC
         """
 
         connection = None
@@ -126,7 +129,8 @@ class SqlServerOrderRepository:
             return str(value).strip() if value is not None else None
 
         return Order(
-            order_number=str(row["Belegnummer"]).strip(),
+            document_number=str(row["Belegnummer"]).strip(),
+            order_number=optional_text("order_number"),
             document_type=belegtyp,
             status=(
                 int(row["Status"])
@@ -145,6 +149,7 @@ class SqlServerOrderRepository:
             email=optional_text("email"),
             phone_number=optional_text("phone_number"),
             language=optional_text("language"),
+            platform=optional_text("platform"),
             items=items,
         )
     def filter_orders(
@@ -225,7 +230,8 @@ class SqlServerOrderRepository:
 
         query = f"""
             SELECT TOP {safe_limit}
-                Belegnummer AS OrderNumber,
+                Belegnummer AS DocumentNumber,
+                IhrAuftrag AS OrderNumber,
                 Belegtyp AS DocumentType,
                 Status AS OrderStatus,
                 AngelegtAm AS CreationDate,
@@ -277,7 +283,11 @@ class SqlServerOrderRepository:
 
         return [
             Order(
-                order_number=str(row["OrderNumber"]),
+                document_number=str(row["DocumentNumber"]).strip(),
+                order_number=(
+                    str(row["OrderNumber"]).strip()
+                    if row.get("OrderNumber") is not None else None
+                ),
                 document_type=str(row["DocumentType"]),
                 status=int(row["OrderStatus"]),
                 date_created=row.get("CreationDate"),
@@ -503,8 +513,8 @@ class SqlServerOrderRepository:
                 t1.Belegtyp AS DocumentType,
                 t1.Status AS Status,
                 t2.Name AS Platform,
-                t1.Netto AS FinalPrice, 
-                t1.Brutto AS FirstPrice,
+                t1.FremdwaehrungNetto AS FinalPrice, 
+                t1.FremdwaehrungBrutto AS FirstPrice,
                 t1.Steuer AS Taxes,
                 t1.Land AS Country,
                 t1.Plz AS Postcode,

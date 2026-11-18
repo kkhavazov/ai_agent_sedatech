@@ -60,7 +60,9 @@ class OrderFiltersArguments(BaseModel):
     order_number: str | None = Field(
         default=None,
         description=(
-            "Full or partial order number, for example AG0950953."
+            "Full or partial internal document number (Belegnummer) for filter_orders, "
+            "for example RA171165. This input is not the external order_number "
+            "returned in results. Not supported by count_orders."
         ),
         min_length=1,
         max_length=50,
@@ -81,27 +83,27 @@ class OrderFiltersArguments(BaseModel):
         description=(
             "Raw status of the selected document stage. "
             "For D and L: 0 means active and 2 means completed. "
-            "For R, status normally remains 0."
+            "For R, status normally remains 0. Pass the string '0' or '2'."
         ),
     )
 
     customer_name: str | None = Field(
         default=None,
-        description="Full or partial customer name.",
+        description="Full or partial customer name for filter_orders. Not supported by count_orders.",
         min_length=1,
         max_length=100,
     )
 
     country: str | None = Field(
         default=None,
-        description="Country of orders' customer",
+        description="Reserved; country filtering is not implemented for filter_orders or count_orders. Omit this field.",
         min_length=1,
         max_length=100,
     )
 
     address: str | None = Field(
         default=None,
-        description="Address of orders' customer",
+        description="Reserved; address filtering is not implemented for filter_orders or count_orders. Omit this field.",
         min_length=1,
         max_length=100,
     )

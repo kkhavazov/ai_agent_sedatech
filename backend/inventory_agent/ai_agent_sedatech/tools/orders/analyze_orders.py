@@ -16,13 +16,21 @@ class AnalyzeDataArguments(BaseModel):
     metrics: list[Metric] = Field(
         default_factory=lambda: [
             "revenue", "order_count", "average_production_time"
-        ], min_length=1
+        ], min_length=1,
+        description="Select only the requested metrics; do not request unrelated metrics.",
     )
     group_by: list[GroupBy] = Field(
         default_factory=lambda: ["year", "month"],
-        description="day is a YYYY-MM-DD date; week is its Monday start date (YYYY-MM-DD).",
+        description="Use [] for a single total. day is a YYYY-MM-DD date; week is its Monday start date (YYYY-MM-DD).",
     )
-    filters: dict[str, str | int | float | bool] = Field(default_factory=dict)
+    filters: dict[str, str | int | float | bool] = Field(
+        default_factory=dict,
+        description=(
+            "Exact-match filters: platform (sales channel), country, city, postcode, "
+            "customer_number, document_type, status. Use top-level document_type "
+            "and status for lifecycle stages and date_from/date_to for dates."
+        ),
+    )
     date_from: date | None = None
     date_to: date | None = None
     document_type: Literal["D", "L", "R"] | None = "R"

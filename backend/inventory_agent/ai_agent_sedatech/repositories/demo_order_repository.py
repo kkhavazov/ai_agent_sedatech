@@ -10,7 +10,7 @@ class DemoOrderRepository(OrderRepository):
     def __init__(self) -> None:
         self._orders = {
             "LS163908": Order(
-                order_number="LS163908",
+                document_number="LS163908",
                 document_type="L",
                 status=0,
                 customer_name="Mauro Guagliardo",
@@ -56,7 +56,7 @@ class DemoOrderRepository(OrderRepository):
             orders = [
                 order
                 for order in orders
-                if search in order.order_number.casefold()
+                if search in order.document_number.casefold()
             ]
 
         if status:
