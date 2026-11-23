@@ -222,6 +222,7 @@ cache-snapshot.db
 .uv-python/
 .venv-mcp/
 .tunnel-client/
+.company-monitor/
 *-key.pem
 localhost+2.pem
 backend/.env.example
