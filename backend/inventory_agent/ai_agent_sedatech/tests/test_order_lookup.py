@@ -40,7 +40,9 @@ def order_row():
         "Belegnummer": "RA171165", "Belegtyp": "R", "Status": 0,
         "date_created": datetime(2026, 11, 17, 14, 30),
         "Vorname": "Ada", "Name": "Example", "country": "DE",
-        "price": Decimal("1507.02"),
+        "selling_price": Decimal("1507.02"),
+        "production_cost": Decimal("1000.10"),
+        "gross_profit": Decimal("266.30"),
         "tracking_number": "001234567890", "tax_number": "DE001234567",
         "company_name": "Example GmbH", "email": "ada@example.com",
         "phone_number": "+49 030 012345", "language": "DE",
@@ -63,6 +65,9 @@ def test_order_lookup_maps_sql_aliases_and_preserves_text_and_components():
     assert data["date"] == data["date_created"]
     assert data["country"] == "DE"
     assert data["final_price"] == 1507.02
+    assert data["selling_price"] == 1507.02
+    assert data["production_cost"] == 1000.10
+    assert data["gross_profit"] == 266.30
     assert data["customer_name"] == "Ada Example"
     for field in TEXT_FIELDS:
         assert data[field] == row[field]
@@ -73,6 +78,9 @@ def test_order_lookup_maps_sql_aliases_and_preserves_text_and_components():
     assert "t2.Name AS platform" in query
     assert "t1._TRACKING AS tracking_number" in query
     assert "t1.IhrAuftrag AS order_number" in query
+    assert "t1.EuroBrutto AS selling_price" in query
+    assert "t1.UebernahmeOffen AS production_cost" in query
+    assert "t1.ErloesEuro AS gross_profit" in query
     assert "LEFT JOIN dbo.MITARBW AS t2 ON t1.Vertreter = t2.Nr" in query
     assert parameters == ("RA171165",)
     assert cursor.execute.call_args_list[1].args[1] == ("RA171165",)
@@ -82,7 +90,7 @@ def test_order_lookup_maps_sql_aliases_and_preserves_text_and_components():
 def test_order_lookup_returns_optional_fields_as_text_or_null(value):
     row = order_row()
     row.update({field: value for field in TEXT_FIELDS})
-    row.update(date_created=None, price=None, country=None)
+    row.update(date_created=None, selling_price=None, production_cost=None, gross_profit=None, country=None)
 
     result, _ = lookup(row)
 
@@ -93,6 +101,9 @@ def test_order_lookup_returns_optional_fields_as_text_or_null(value):
         assert data[field] == (None if value is None else str(value))
     assert data["date_created"] is None
     assert data["final_price"] is None
+    assert data["selling_price"] is None
+    assert data["production_cost"] is None
+    assert data["gross_profit"] is None
     assert data["country"] is None
 
 
@@ -113,7 +124,8 @@ def test_filtered_order_can_be_looked_up_by_document_number(external_reference):
         "DocumentNumber": "RA171165", "OrderNumber": external_reference,
         "DocumentType": "R", "OrderStatus": 0,
         "CreationDate": row["date_created"], "CustomerName": "Ada Example",
-        "Country": "DE", "Address": "Example Street", "FinalPrice": row["price"],
+        "Country": "DE", "Address": "Example Street",
+        **{key: row[key] for key in ("selling_price", "production_cost", "gross_profit")},
     }], []]
     cursor.fetchone.return_value = row
     connection = Mock()
@@ -126,9 +138,15 @@ def test_filtered_order_can_be_looked_up_by_document_number(external_reference):
     document = filtered["orders"][0]
     assert document["document_number"] == "RA171165"
     assert document["order_number"] == external_reference
+    assert document["selling_price"] == document["final_price"] == 1507.02
+    assert document["production_cost"] == 1000.10
+    assert document["gross_profit"] == 266.30
     query = cursor.execute.call_args_list[0].args[0]
     assert "Belegnummer AS DocumentNumber" in query
     assert "IhrAuftrag AS OrderNumber" in query
+    assert "EuroBrutto AS selling_price" in query
+    assert "UebernahmeOffen AS production_cost" in query
+    assert "ErloesEuro AS gross_profit" in query
 
     result = build_get_order_tool(service).handler(
         order_number=document["document_number"]

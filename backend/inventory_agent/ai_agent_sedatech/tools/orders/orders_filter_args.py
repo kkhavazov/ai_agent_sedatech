@@ -27,11 +27,12 @@ def resolve_lifecycle_filters(
     lifecycle_state: LifecycleState | None,
     document_type: DocumentType | None,
     status: DocumentStatus | None,
-) -> tuple[DocumentType | None, DocumentStatus | None]:
+) -> tuple[DocumentType, DocumentStatus | None]:
+    """Resolve explicit stages first; otherwise restrict sales to invoices."""
     if lifecycle_state is not None:
         return LIFECYCLE_FILTERS[lifecycle_state]
 
-    return document_type, status
+    return document_type if document_type is not None else "R", status
 
 
 class OrderFiltersArguments(BaseModel):
@@ -74,7 +75,8 @@ class OrderFiltersArguments(BaseModel):
             "Raw database document type. "
             "'D' = confirmed Werkstattschein, "
             "'L' = Lieferschein / production stage, "
-            "'R' = Rechnung / final stage."
+            "'R' = Rechnung / final stage. Defaults to R when neither "
+            "document_type nor lifecycle_state is supplied."
         ),
     )
 

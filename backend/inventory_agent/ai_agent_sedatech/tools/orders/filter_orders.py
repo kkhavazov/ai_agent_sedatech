@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import Field
 
 from services.order_service import OrderService
 
@@ -36,32 +36,6 @@ class FilterOrdersArguments(OrderFiltersArguments):
             "and 'newest' for the latest order."
         ),
     )
-
-    @model_validator(mode="after")
-    def require_at_least_one_filter(
-        self,
-    ) -> "FilterOrdersArguments":
-        has_filter = any(
-            value is not None
-            for value in (
-                self.lifecycle_state,
-                self.order_number,
-                self.document_type,
-                self.status,
-                self.customer_name,
-                self.country,
-                self.date_from,
-                self.date_to,
-            )
-        )
-
-        if not has_filter:
-            raise ValueError(
-                "At least one filter must be provided."
-            )
-
-        return self
-
 
 class CountOrdersArguments(OrderFiltersArguments):
     """Arguments for counting matching orders."""
@@ -136,6 +110,9 @@ def create_filter_orders_handler(
                     "country": order.country,
                     "address": order.address,
                     "final_price": order.final_price,
+                    "selling_price": order.selling_price,
+                    "production_cost": order.production_cost,
+                    "gross_profit": order.gross_profit,
                 }
                 for order in orders
             ],

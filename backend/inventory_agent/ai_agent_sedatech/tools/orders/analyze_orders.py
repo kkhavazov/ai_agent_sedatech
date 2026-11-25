@@ -8,7 +8,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field, ValidationInfo, field_validator, model_validator
 
 from services.order_service import OrderService
-Metric = Literal["revenue", "order_count"]
+Metric = Literal["revenue", "selling_price", "production_cost", "gross_profit", "order_count"]
 GroupBy = Literal["year", "month", "week", "day", "platform", "country", "city", "postcode"]
 
 
@@ -17,7 +17,11 @@ class AnalyzeDataArguments(BaseModel):
         default_factory=lambda: [
             "revenue", "order_count"
         ], min_length=1,
-        description="Select only the requested metrics; do not request unrelated metrics.",
+        description=(
+            "Select only the requested metrics. revenue and selling_price both sum "
+            "gross selling prices in EUR. production_cost and gross_profit sum "
+            "the corresponding recorded order values."
+        ),
     )
     group_by: list[GroupBy] = Field(
         default_factory=lambda: ["year", "month"],

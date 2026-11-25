@@ -81,10 +81,12 @@ def build_tool_registry(
                 "specific date = L with any status; finished production = L/2. "
                 "For the oldest or earliest matching order, use "
                 "sort_order='oldest' and limit=1; for the newest use "
-                "sort_order='newest' and limit=1. At least one lifecycle, document, "
-                "status, order-number, customer-name, or date filter is required. "
+                "sort_order='newest' and limit=1. When neither document_type nor "
+                "lifecycle_state is supplied, defaults to R (invoices) to avoid "
+                "counting multiple lifecycle stages of the same order. "
                 "Country and address filters are not implemented; do not claim "
-                "they were applied."
+                "they were applied. Returns selling_price (gross EUR), production_cost, "
+                "and gross_profit; final_price is a legacy alias for selling_price."
             ),
             arguments_model=FilterOrdersArguments,
             handler=create_filter_orders_handler(order_service),
@@ -97,7 +99,7 @@ def build_tool_registry(
                 "Analyze customer sales orders, not incoming supplier deliveries. "
                 "For incoming supplier deliveries use analyze_deliveries. "
                 "Return order data for analysis, grouping, trends, "
-                "revenue calculations, and breakdowns by platform, country, "
+                "revenue, production cost, gross profit, and breakdowns by platform, country, "
                 "or date, with optional status filters. Use document_type and integer status for current "
                 "operational stages: confirmed workshop=D/0, "
                 "in production=L/0, ready or sent=R/0. This tool has no "
@@ -116,6 +118,8 @@ def build_tool_registry(
             description=(
                 "Count customer sales order documents matching lifecycle, document "
                 "type, status, or creation-date filters. Returns an integer count. "
+                "When neither document_type nor lifecycle_state is supplied, "
+                "defaults to R (invoices); earlier stages are excluded. "
                 "Customer name, order number, country, and address filters are "
                 "not implemented for this tool; do not pass them or claim they "
                 "were applied. Do not drop a requested filter to obtain a count. "

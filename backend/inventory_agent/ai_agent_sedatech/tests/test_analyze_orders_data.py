@@ -4,6 +4,7 @@ import pandas as pd
 import pytest
 
 from services.order_service import OrderService
+from repositories.demo_order_repository import DemoOrderRepository
 from tools.factory import build_tool_registry
 from tools.orders.analyze_orders import AnalyzeDataArguments, create_analyze_data_handler
 
@@ -16,7 +17,7 @@ class AnalyzeRepository:
         self.arguments = arguments
         return pd.DataFrame.from_records([{
             "CreatedAt": datetime(2026, 8, 21, 12, 30),
-            "FinalPrice": 1499.0,
+            "selling_price": 1499.0,
             "Country": "DE",
         }])
 
@@ -34,6 +35,22 @@ def test_analyze_handler_aggregates_dataframe() -> None:
         "year": 2026, "month": 8, "revenue": 1499.0, "order_count": 1
     }
     assert repository.arguments["document_type"] == "R"
+
+
+@pytest.mark.parametrize("document_type", ["L", "R"])
+def test_demo_price_metrics_match_order_details_and_allow_empty_results(document_type):
+    repository = DemoOrderRepository()
+    order = repository.find_by_order_number("LS163908")
+    result = create_analyze_data_handler(OrderService(repository))(
+        metrics=["selling_price", "production_cost", "gross_profit", "order_count"],
+        document_type=document_type,
+    )
+    assert result["rows"] == [{
+        "selling_price": order.selling_price if document_type == "L" else None,
+        "production_cost": None,
+        "gross_profit": None,
+        "order_count": 1 if document_type == "L" else 0,
+    }]
 
 
 def test_analyze_tool_is_registered() -> None:
@@ -76,7 +93,7 @@ def test_daily_and_weekly_grouping_across_year_boundary(group) -> None:
                     "2026-01-04 23:59", "2026-01-05 00:00",
                     "2027-01-05 12:00",
                 ]),
-                "FinalPrice": [10, 20, 30, 40, 50],
+                "selling_price": [10, 20, 30, 40, 50],
             })
 
     arguments = AnalyzeDataArguments(

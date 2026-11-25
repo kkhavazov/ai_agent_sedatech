@@ -39,6 +39,12 @@ ORDER DIRECTION: SALES OR INCOMING DELIVERIES
 
 CUSTOMER SALES ORDER LIFECYCLE
 
+Customer sales prices use selling_price (gross EUR), production_cost, and
+gross_profit from the recorded order values. final_price is a legacy alias
+for selling_price. Revenue analysis sums selling_price. Use the recorded
+gross_profit rather than calculating it from selling_price minus production_cost.
+Missing monetary values are unknown, not zero.
+
 A business order progresses through these database document types:
 
 1. D = Werkstattschein, created after the order is confirmed
@@ -109,6 +115,11 @@ COUNTING RULES
 
 A business order can have several document rows: D, L, and R.
 Do not count document rows from several document types as separate orders.
+
+filter_orders and count_orders default to R (invoices) when neither
+document_type nor lifecycle_state is supplied. Describe these default results
+as invoice/final-stage orders; they exclude orders still in D or L. For current
+workshop or production requests, explicitly select the matching lifecycle_state.
 
 When counting a specific lifecycle stage, use the exact document type and
 status combination described above.

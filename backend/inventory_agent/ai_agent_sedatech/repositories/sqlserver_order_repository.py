@@ -65,7 +65,9 @@ class SqlServerOrderRepository:
                 t1._FIRMENNAME AS company_name,
                 t1._EMAIL1 AS email,
                 t1._MOBILNUMMER AS phone_number,
-                t1.EuroBrutto AS price,
+                t1.EuroBrutto AS selling_price,
+                t1.UebernahmeOffen AS production_cost,
+                t1.ErloesEuro AS gross_profit,
                 t1.Land AS country
             FROM dbo.BELEG AS t1
             LEFT JOIN dbo.MITARBW AS t2 ON t1.Vertreter = t2.Nr
@@ -140,8 +142,17 @@ class SqlServerOrderRepository:
             date_created=row.get("date_created"),
             customer_name=customer_name,
             country=optional_text("country"),
-            final_price=(
-                float(row["price"]) if row.get("price") is not None else None
+            selling_price=(
+                float(row["selling_price"])
+                if row.get("selling_price") is not None else None
+            ),
+            production_cost=(
+                float(row["production_cost"])
+                if row.get("production_cost") is not None else None
+            ),
+            gross_profit=(
+                float(row["gross_profit"])
+                if row.get("gross_profit") is not None else None
             ),
             tracking_number=optional_text("tracking_number"),
             tax_number=optional_text("tax_number"),
@@ -240,7 +251,9 @@ class SqlServerOrderRepository:
                 )) AS CustomerName,
                 Land AS Country,
                 Strasse AS Address,
-                EuroBrutto AS FinalPrice
+                EuroBrutto AS selling_price,
+                UebernahmeOffen AS production_cost,
+                ErloesEuro AS gross_profit
             FROM dbo.BELEG
             {where_sql}
             ORDER BY AngelegtAm {sort_direction}
@@ -298,9 +311,19 @@ class SqlServerOrderRepository:
                 ),
                 country=str(row["Country"]),
                 address=str(row["Address"]),
-                final_price=(
-                    float(row["FinalPrice"])
-                    if row.get("FinalPrice") is not None
+                selling_price=(
+                    float(row["selling_price"])
+                    if row.get("selling_price") is not None
+                    else None
+                ),
+                production_cost=(
+                    float(row["production_cost"])
+                    if row.get("production_cost") is not None
+                    else None
+                ),
+                gross_profit=(
+                    float(row["gross_profit"])
+                    if row.get("gross_profit") is not None
                     else None
                 ),
                 items=[],
@@ -474,7 +497,7 @@ class SqlServerOrderRepository:
         *,
         date_from: date | None = None,
         date_to: date | None = None,
-        document_type: str | None = None,
+        document_type: str | None = "R",
         status: int | None = None,
         max_rows: int = 10000,
     ):
@@ -513,8 +536,9 @@ class SqlServerOrderRepository:
                 t1.Belegtyp AS DocumentType,
                 t1.Status AS Status,
                 t2.Name AS Platform,
-                t1.FremdwaehrungNetto AS FinalPrice, 
-                t1.FremdwaehrungBrutto AS FirstPrice,
+                t1.EuroBrutto AS selling_price,
+                t1.UebernahmeOffen AS production_cost,
+                t1.ErloesEuro AS gross_profit,
                 t1.Steuer AS Taxes,
                 t1.Land AS Country,
                 t1.Plz AS Postcode,
@@ -535,7 +559,7 @@ class SqlServerOrderRepository:
             rows = cursor.fetchall() or []
             columns = [
                 "CreatedAt", "CustomerNumber", "DocumentType", "Status",
-                "Platform", "FinalPrice", "FirstPrice", "Taxes",
+                "Platform", "selling_price", "production_cost", "gross_profit", "Taxes",
                 "Country", "Postcode", "City",
             ]
             return pd.DataFrame.from_records(rows, columns=columns)

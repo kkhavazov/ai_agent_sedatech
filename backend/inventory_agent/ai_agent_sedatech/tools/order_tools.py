@@ -65,6 +65,9 @@ def build_get_order_tool(service: OrderService) -> ToolDefinition:
             "customer_name": order.customer_name,
             "country": order.country,
             "final_price": order.final_price,
+            "selling_price": order.selling_price,
+            "production_cost": order.production_cost,
+            "gross_profit": order.gross_profit,
             "tracking_number": order.tracking_number,
             "tax_number": order.tax_number,
             "company_name": order.company_name,
@@ -92,6 +95,8 @@ def build_get_order_tool(service: OrderService) -> ToolDefinition:
             "tax_number is the VAT identification number (USt-IdNr.). "
             "platform is the sales channel the order came from, such as Amazon "
             "or the website, and is text or null when unknown. "
+            "selling_price is the gross selling price in EUR; final_price is its legacy alias. "
+            "production_cost and gross_profit are the recorded order totals, or null when unknown. "
             "date_created is the creation date of the returned order/document; "
             "for document_type R it is the date it was sent. date is a legacy alias. "
             "This is not a confirmed delivery date. A tracking number alone does "

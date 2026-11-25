@@ -23,7 +23,7 @@ class Order:
     customer_name: str | None = None
     country: str | None = None
     address: str | None = None
-    final_price: float | None = None
+    selling_price: float | None = None
     items: list[OrderItem] = field(default_factory=list)
     tracking_number: str | None = None
     tax_number: str | None = None
@@ -33,6 +33,13 @@ class Order:
     language: str | None = None
     platform: str | None = None
     order_number: str | None = None
+    production_cost: float | None = None
+    gross_profit: float | None = None
+
+    @property
+    def final_price(self) -> float | None:
+        """Compatibility alias for the selling price."""
+        return self.selling_price
 
     @property
     def date(self) -> datetime | None:

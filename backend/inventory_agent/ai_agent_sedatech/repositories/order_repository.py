@@ -33,7 +33,7 @@ class OrderRepository(ABC):
         *,
         date_from: date | None = None,
         date_to: date | None = None,
-        document_type: str | None = None,
+        document_type: str | None = "R",
         status: int | None = None,
         max_rows: int = 10000,
     ) -> Any:

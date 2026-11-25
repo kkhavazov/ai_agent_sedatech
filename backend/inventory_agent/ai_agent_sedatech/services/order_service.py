@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import date
-from typing import Any, Literal
+from typing import Any, Callable, Literal
 
 from models.order import Order
 from repositories.order_repository import OrderRepository
@@ -119,7 +119,7 @@ class OrderService:
         filters: dict[str, str | int | float | bool],
         date_from: date | None = None,
         date_to: date | None = None,
-        document_type: str | None = None,
+        document_type: str | None = "R",
         status: int | None = None,
         sort_by: str | None = None,
         sort_direction: Literal["asc", "desc"] = "asc",
@@ -160,9 +160,14 @@ class OrderService:
         rename_groups = {key: columns[key] for key in group_by if key in columns}
         frame = frame.rename(columns={value: key for key, value in rename_groups.items()})
 
-        aggregations: dict[str, tuple[str, str]] = {}
-        if "revenue" in metrics:
-            aggregations["revenue"] = ("FinalPrice", "sum")
+        def sum_prices(values: pd.Series) -> Any:
+            return values.sum(min_count=1)
+
+        aggregations: dict[str, tuple[str, str | Callable[[pd.Series], Any]]] = {}
+        for metric in ("revenue", "selling_price", "production_cost", "gross_profit"):
+            if metric in metrics:
+                column = "selling_price" if metric == "revenue" else metric
+                aggregations[metric] = (column, sum_prices)
         if "order_count" in metrics:
             aggregations["order_count"] = ("CreatedAt", "size")
 
@@ -171,6 +176,9 @@ class OrderService:
         else:
             values = {}
             for name, (column, operation) in aggregations.items():
+                if callable(operation):
+                    values[name] = operation(frame[column])
+                    continue
                 attribute = getattr(frame[column], operation)
                 values[name] = attribute() if callable(attribute) else attribute
             result = pd.DataFrame([values])

@@ -14,6 +14,7 @@ class DemoOrderRepository(OrderRepository):
                 document_type="L",
                 status=0,
                 customer_name="Mauro Guagliardo",
+                selling_price=1507.02,
                 items=[
                     OrderItem(
                         sku="UCCZ604I1_13915",
@@ -85,7 +86,7 @@ class DemoOrderRepository(OrderRepository):
         *,
         date_from: date | None = None,
         date_to: date | None = None,
-        document_type: str | None = None,
+        document_type: str | None = "R",
         status: int | None = None,
         max_rows: int = 10000,
     ):
@@ -98,10 +99,9 @@ class DemoOrderRepository(OrderRepository):
                 "DocumentType": order.document_type,
                 "Status": order.status,
                 "Platform": "Demo",
-                "FinalPrice": sum(
-                    (item.price or 0) * item.quantity for item in order.items
-                ),
-                "FirstPrice": None,
+                "selling_price": order.selling_price,
+                "production_cost": order.production_cost,
+                "gross_profit": order.gross_profit,
                 "Taxes": None,
                 "Country": None,
                 "Postcode": None,
@@ -111,4 +111,9 @@ class DemoOrderRepository(OrderRepository):
             if (document_type is None or order.document_type == document_type)
             and (status is None or order.status == status)
         ]
-        return pd.DataFrame.from_records(rows[:max_rows])
+        columns = [
+            "CreatedAt", "CustomerNumber", "DocumentType", "Status",
+            "Platform", "selling_price", "production_cost", "gross_profit", "Taxes",
+            "Country", "Postcode", "City",
+        ]
+        return pd.DataFrame.from_records(rows[:max_rows], columns=columns)
