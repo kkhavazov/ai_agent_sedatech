@@ -22,6 +22,8 @@ class DemoItemRepository(ItemRepository):
         self,
         *,
         sku: str | None = None,
+        ean: str | None = None,
+        producer_ean: str | None = None,
         manufacturer: str | None = None,
         category: str | None = None,
         item_name: str | None = None,
@@ -53,6 +55,8 @@ class DemoItemRepository(ItemRepository):
         if any(
             value is not None
             for value in (
+                ean,
+                producer_ean,
                 cpu_manufacturer,
                 cpu_generation,
                 cpu_model,

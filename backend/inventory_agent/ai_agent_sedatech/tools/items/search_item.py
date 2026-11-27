@@ -4,9 +4,9 @@ import re
 from dataclasses import asdict
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
-from models.item import ORDERED_AMOUNT_DESCRIPTION
+from models.item import EAN_DESCRIPTION, ORDERED_AMOUNT_DESCRIPTION, PRODUCER_EAN_DESCRIPTION
 from repositories.sqlserver_item_repository import case_inventory
 from services.item_service import ItemService
 
@@ -16,6 +16,18 @@ GPUManufacturerType = Literal["NVIDIA", "AMD"]
 GPUSeriesType = Literal["GeForce", "Radeon", "Quadro", "Nvidia"]
 
 class SearchItemsArguments(BaseModel):
+    ean: str | None = Field(
+        default=None,
+        description=EAN_DESCRIPTION + " Exact match; use ean for barcode lookups, not sku.",
+        min_length=1,
+        max_length=100,
+    )
+    producer_ean: str | None = Field(
+        default=None,
+        description=PRODUCER_EAN_DESCRIPTION + " Exact match; use for ProducerEAN or MPN lookups.",
+        min_length=1,
+        max_length=100,
+    )
     sku: str | None = Field(
         default=None,
         description="Full or partial item SKU, for example CP00000.",
@@ -161,6 +173,16 @@ class SearchItemsArguments(BaseModel):
         le=100,
     )
 
+    @field_validator("ean", "producer_ean")
+    @classmethod
+    def normalize_identifier(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip()
+        if not value:
+            raise ValueError("EAN and ProducerEAN must be non-empty strings")
+        return value
+
     @model_validator(mode="after")
     def validate_and_normalize_filters(self) -> "SearchItemsArguments":
         if self.category is not None:
@@ -233,6 +255,8 @@ class SearchItemsArguments(BaseModel):
         if not any(
             (
                 self.sku,
+                self.ean,
+                self.producer_ean,
                 self.item_name,
                 self.category,
                 self.ram_capacity,
@@ -312,6 +336,8 @@ def create_search_items_handler(item_service: ItemService):
     def search_items_handler(
         *,
         sku: str | None = None,
+        ean: str | None = None,
+        producer_ean: str | None = None,
         category: str | None = None,
         item_name: str | None = None,
         ram_capacity: int | None = None,
@@ -332,6 +358,8 @@ def create_search_items_handler(item_service: ItemService):
         # Validate and normalize inputs using SearchItemsArguments
         args = SearchItemsArguments(
             sku=sku,
+            ean=ean,
+            producer_ean=producer_ean,
             category=category,
             item_name=item_name,
             ram_capacity=ram_capacity,
@@ -353,6 +381,8 @@ def create_search_items_handler(item_service: ItemService):
 
         result = item_service.search_items(
             sku=args.sku,
+            ean=args.ean,
+            producer_ean=args.producer_ean,
             category=args.category,
             item_name=args.item_name,
             ram_capacity=args.ram_capacity,
@@ -373,6 +403,8 @@ def create_search_items_handler(item_service: ItemService):
         return {
             "requested_filters": {
                 "sku": args.sku,
+                "ean": args.ean,
+                "producer_ean": args.producer_ean,
                 "category": args.category,
                 "item_name": args.item_name,
                 "ram_capacity": args.ram_capacity,
@@ -391,7 +423,11 @@ def create_search_items_handler(item_service: ItemService):
                 "gpu_vram": args.gpu_vram,
             },
             "items": [asdict(item) for item in result],
-            "field_descriptions": {"ordered": ORDERED_AMOUNT_DESCRIPTION},
+            "field_descriptions": {
+                "ordered": ORDERED_AMOUNT_DESCRIPTION,
+                "ean": EAN_DESCRIPTION,
+                "producer_ean": PRODUCER_EAN_DESCRIPTION,
+            },
         }
 
     return search_items_handler

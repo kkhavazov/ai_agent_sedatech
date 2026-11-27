@@ -45,6 +45,24 @@ def registry_for(repository):
     )
 
 
+@pytest.mark.parametrize("field,column", [
+    ("ean", "ART.EANNummer"),
+    ("producer_ean", "ART.HstArtikelnummer"),
+])
+def test_delivery_identifier_filters_reach_sql_builder(field, column):
+    repository = DeliveryRepositoryStub([])
+    result = registry_for(repository).execute("analyze_deliveries", {
+        "components": [{field: " 0012345678905 "}],
+    })
+
+    assert result["success"] is True
+    filters, parameters = SqlServerDeliveryRepository._build_component_filters(
+        repository.arguments["components"],
+    )
+    assert f"{column} = %s" in filters[0]
+    assert parameters == ["0012345678905"]
+
+
 @pytest.mark.parametrize("status", ["received", "waiting", None])
 def test_delivery_tool_forwards_filters_and_returns_json_table(status):
     repository = DeliveryRepositoryStub([delivery_row(status=status or "received")])

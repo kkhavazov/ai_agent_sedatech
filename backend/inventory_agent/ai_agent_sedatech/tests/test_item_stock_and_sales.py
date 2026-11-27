@@ -8,6 +8,7 @@ import pytest
 
 from repositories.sqlserver_item_repository import SqlServerItemRepository
 from services.item_service import ItemService
+from tools.items.analyse_items_used import create_analyse_items_used_handler
 
 
 class RecordingCursor:
@@ -48,6 +49,26 @@ def make_repository(rows=(), error=None):
     connection = RecordingConnection(rows, error)
     repository._connect = lambda: connection
     return repository, connection, connection.recording_cursor
+
+
+@pytest.mark.parametrize("filters", [
+    {"sku": "CP00001"},
+    {"ean": "0012345678905"},
+    {"producer_ean": "100-100000662WOF"},
+])
+def test_sales_handler_shared_filters_reach_sql_repository(filters):
+    repository, _, cursor = make_repository()
+    handler = create_analyse_items_used_handler(ItemService(repository))
+
+    result = handler(
+        date_from=date(2026, 1, 1), date_to=date(2026, 1, 31), **filters,
+    )
+
+    assert result["rows"] == []
+    assert result["requested_filters"] == filters
+    field, value = next(iter(filters.items()))
+    expected = f"%{value}%" if field == "sku" else value
+    assert cursor.parameters == (expected, date(2026, 1, 1), date(2026, 1, 31))
 
 
 def test_single_sku_stock_lookup_uses_parameter_and_dictionary_row():

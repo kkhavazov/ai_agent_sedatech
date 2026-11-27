@@ -40,6 +40,8 @@ class ItemRepository(ABC):
         self,
         *,
         sku: str | None = None,
+        ean: str | None = None,
+        producer_ean: str | None = None,
         category: str | None = None,
         item_name: str | None = None,
         ram_capacity: int | None = None,

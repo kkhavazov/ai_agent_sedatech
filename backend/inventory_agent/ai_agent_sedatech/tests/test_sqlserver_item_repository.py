@@ -1,3 +1,5 @@
+import pytest
+
 from repositories.sqlserver_item_repository import SqlServerItemRepository
 
 
@@ -22,6 +24,8 @@ class FakeCursor:
                 "MinimumPrice": 100,
                 "MaximumPrice": 300,
                 "AveragePrice": 200,
+                "EAN": "0012345678905",
+                "ProducerEAN": "100-100000662WOF",
             }
         ]
 
@@ -45,6 +49,52 @@ def make_repository():
     connection = FakeConnection()
     repository._connect = lambda: connection
     return repository, connection.cursor_instance
+
+
+@pytest.mark.parametrize(
+    "field,column,value",
+    [
+        ("ean", "ART.EANNummer", "0012345678905"),
+        ("producer_ean", "ART.HstArtikelnummer", "100-100000662WOF"),
+        ("producer_ean", "ART.HstArtikelnummer", "part%' OR 1=1 --"),
+    ],
+)
+def test_identifier_search_uses_exact_bound_parameters(field, column, value) -> None:
+    repository, cursor = make_repository()
+
+    result = repository.search_inventory(**{field: f" {value} "})
+
+    assert cursor.query.count(f"{column} = %s") == 2
+    assert cursor.parameters == (value, value)
+    assert value not in cursor.query
+    assert "Stock.EAN," in cursor.query
+    assert "Stock.ProducerEAN," in cursor.query
+    assert result[0].ean == "0012345678905"
+    assert result[0].producer_ean == "100-100000662WOF"
+
+
+def test_identifier_filters_combine_with_existing_filters() -> None:
+    repository, cursor = make_repository()
+
+    repository.search_inventory(
+        ean="0012345678905", producer_ean="100-100000662WOF", category="CP",
+    )
+
+    assert "ART.EANNummer = %s AND ART.HstArtikelnummer = %s AND ART.ArtikelGruppe LIKE %s" in cursor.query
+    assert cursor.parameters == ("0012345678905", "100-100000662WOF", "%CP%") * 2
+    assert cursor.query.count("%s") == len(cursor.parameters)
+
+
+def test_null_identifiers_remain_unknown() -> None:
+    repository, cursor = make_repository()
+    row = cursor.fetchall()[0]
+    row.update(EAN=None, ProducerEAN=None)
+    cursor.fetchall = lambda: [row]
+
+    result = repository.search_inventory(sku="CP00001")
+
+    assert result[0].ean is None
+    assert result[0].producer_ean is None
 
 
 def test_amd_cpu_search_uses_cpu_manufacturer_and_prefix_match() -> None:

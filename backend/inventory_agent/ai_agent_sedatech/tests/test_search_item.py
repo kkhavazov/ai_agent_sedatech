@@ -25,6 +25,8 @@ class StubItemRepository:
                 minimum_price=10.0,
                 maximum_price=20.0,
                 average_price=15.0,
+                ean="0012345678905",
+                producer_ean="CMK32GX5M2B6000C30",
             )
         ]
 
@@ -44,10 +46,49 @@ def test_search_item_handler_returns_named_articles() -> None:
             "minimum_price": 10.0,
             "maximum_price": 20.0,
             "average_price": 15.0,
+            "ean": "0012345678905",
+            "producer_ean": "CMK32GX5M2B6000C30",
         }
     ]
     assert result["requested_filters"]["ram_capacity"] == 32
     assert repository.filters["ram_capacity"] == 32
+
+
+@pytest.mark.parametrize(
+    "filters",
+    [
+        {"ean": "0012345678905"},
+        {"producer_ean": "CMK32GX5M2B6000C30"},
+        {"ean": "0012345678905", "producer_ean": "CMK32GX5M2B6000C30"},
+    ],
+)
+def test_identifier_lookup_forwards_normalized_strings(filters) -> None:
+    repository = StubItemRepository()
+    handler = create_search_items_handler(ItemService(repository))
+
+    result = handler(**{key: f" {value} " for key, value in filters.items()})
+
+    for key, value in filters.items():
+        assert repository.filters[key] == value
+        assert result["requested_filters"][key] == value
+        assert result["items"][0][key] == value
+        assert key in result["field_descriptions"]
+    assert repository.filters["sku"] is None
+    assert repository.filters["category"] is None
+
+
+@pytest.mark.parametrize("field", ["ean", "producer_ean"])
+@pytest.mark.parametrize("value", ["", "   ", 12345678905])
+def test_identifiers_require_nonempty_strings(field, value) -> None:
+    with pytest.raises(ValidationError):
+        SearchItemsArguments(**{field: value})
+
+
+@pytest.mark.parametrize("field", ["ean", "producer_ean"])
+def test_demo_repository_does_not_ignore_identifier_filters(field) -> None:
+    handler = create_search_items_handler(ItemService(DemoItemRepository()))
+
+    assert handler(**{field: "0012345678905"})["items"] == []
 
 
 def test_ram_fields_infer_ram_category() -> None:

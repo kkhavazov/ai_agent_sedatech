@@ -8,6 +8,12 @@ ORDERED_AMOUNT_DESCRIPTION = (
     "Do not subtract it from amount or count it as stock already received."
 )
 
+EAN_DESCRIPTION = "Item barcode (EAN), stored in ART.EANNummer. Preserve leading zeros."
+PRODUCER_EAN_DESCRIPTION = (
+    "Manufacturer article/part number (ProducerEAN), stored in ART.HstArtikelnummer. "
+    "May be alphanumeric; it is distinct from the EAN barcode and internal SKU."
+)
+
 
 class MissingComponentEntry(TypedDict):
     ID: str
@@ -28,6 +34,8 @@ class ItemsSearchResponse:
     minimum_price: float
     maximum_price: float
     average_price: float
+    ean: str | None = None
+    producer_ean: str | None = None
 
 
 @dataclass(slots=True)

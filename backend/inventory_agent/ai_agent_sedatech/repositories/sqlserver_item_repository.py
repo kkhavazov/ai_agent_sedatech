@@ -60,6 +60,8 @@ class SqlServerItemRepository(ItemRepository):
     def _build_article_filters(
         *,
         sku: str | None = None,
+        ean: str | None = None,
+        producer_ean: str | None = None,
         category: str | None = None,
         item_name: str | None = None,
         ram_capacity: int | None = None,
@@ -79,6 +81,16 @@ class SqlServerItemRepository(ItemRepository):
     ) -> tuple[list[str], list[Any]]:
         filters: list[str] = []
         parameters: list[Any] = []
+
+        for value, column in (
+            (ean, "ART.EANNummer"),
+            (producer_ean, "ART.HstArtikelnummer"),
+        ):
+            if value is not None:
+                if not isinstance(value, str) or not value.strip():
+                    raise ValueError("EAN and ProducerEAN must be non-empty strings")
+                filters.append(f"{column} = %s")
+                parameters.append(value.strip())
 
         for value, column in (
             (sku, "ART.Artikelnummer"),
@@ -214,6 +226,8 @@ class SqlServerItemRepository(ItemRepository):
             SELECT
                 Stock.Artikelnummer,
                 Stock.Bezeichnung,
+                Stock.EAN,
+                Stock.ProducerEAN,
                 Stock.ItemCount,
                 Stock.MinimumPrice,
                 Stock.MaximumPrice,
@@ -223,6 +237,8 @@ class SqlServerItemRepository(ItemRepository):
             (
                 SELECT
                     ART.Bezeichnung, ART.Artikelnummer,
+                    ART.EANNummer AS EAN,
+                    ART.HstArtikelnummer AS ProducerEAN,
                     COALESCE(SUM(LAGERP.Bestand), 0) AS ItemCount,
                     MIN(LAGERP.Wert) AS MinimumPrice,
                     MAX(LAGERP.Wert) AS MaximumPrice,
@@ -233,7 +249,7 @@ class SqlServerItemRepository(ItemRepository):
                 INNER JOIN ART
                     ON ART.Artikelnummer = SERIE.Artikelnummer
                 {where_sql}
-                        GROUP BY ART.Bezeichnung, ART.Artikelnummer
+                        GROUP BY ART.Bezeichnung, ART.Artikelnummer, ART.EANNummer, ART.HstArtikelnummer
             ) AS Stock
 
             LEFT JOIN
@@ -280,6 +296,8 @@ class SqlServerItemRepository(ItemRepository):
         self,
         *,
         sku: str | None = None,
+        ean: str | None = None,
+        producer_ean: str | None = None,
         category: str | None = None,
         item_name: str | None = None,
         ram_capacity: int | None = None,
@@ -299,6 +317,8 @@ class SqlServerItemRepository(ItemRepository):
     ) -> list[ItemsSearchResponse]:
         filters, parameters = self._build_article_filters(
             sku=sku,
+            ean=ean,
+            producer_ean=producer_ean,
             category=category,
             item_name=item_name,
             ram_capacity=ram_capacity,
@@ -345,6 +365,11 @@ class SqlServerItemRepository(ItemRepository):
             result.append(ItemsSearchResponse(
                 sku=str(item["Artikelnummer"]),
                 name=str(item["Bezeichnung"]),
+                ean=str(item["EAN"]) if item.get("EAN") is not None else None,
+                producer_ean=(
+                    str(item["ProducerEAN"])
+                    if item.get("ProducerEAN") is not None else None
+                ),
                 amount=total_amount,
                 ordered=ordered_amount,
                 minimum_price=float(item["MinimumPrice"] or 0),
@@ -578,6 +603,8 @@ class SqlServerItemRepository(ItemRepository):
         date_from: date | None = None,
         date_to: date | None = None,
         sku: str | None = None,
+        ean: str | None = None,
+        producer_ean: str | None = None,
         category: str | None = None,
         item_name: str | None = None,
         ram_capacity: int | None = None,
@@ -601,6 +628,8 @@ class SqlServerItemRepository(ItemRepository):
             raise ValueError("date_from cannot be later than date_to")
         filters, parameters = self._build_article_filters(
             sku=sku,
+            ean=ean,
+            producer_ean=producer_ean,
             category=category,
             item_name=item_name,
             ram_capacity=ram_capacity,

@@ -28,6 +28,8 @@ class ItemService:
         self,
         *,
         sku: str | None = None,
+        ean: str | None = None,
+        producer_ean: str | None = None,
         category: str | None = None,
         item_name: str | None = None,
         ram_capacity: int | None = None,
@@ -48,6 +50,8 @@ class ItemService:
         has_filter = any(
             [
                 sku,
+                ean,
+                producer_ean,
                 category,
                 item_name,
                 ram_capacity,
@@ -74,6 +78,8 @@ class ItemService:
 
         return self.repository.search_inventory(
             sku=sku,
+            ean=ean,
+            producer_ean=producer_ean,
             category=category,
             item_name=item_name,
             ram_capacity=ram_capacity,

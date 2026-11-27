@@ -141,10 +141,13 @@ def build_tool_registry(
                 name="search_item",
                 description=(
                     "Return each available article matching the filters, grouped "
-                    "by article number and name, with its SKU, inventory amount, "
+                    "by article number and name, with its SKU, EAN, ProducerEAN, inventory amount, "
                     "ordered amount, and price statistics. "
                     "Use for broader inventory analysis, partial SKU searches, "
-                    "and component filters. For stock quantities of exact SKUs "
+                    "and component filters. Use ean for an exact barcode lookup; "
+                    "use producer_ean for an exact manufacturer article/part number "
+                    "(ProducerEAN/MPN) lookup. These are distinct from sku. "
+                    "Multiple filters combine with AND. For stock quantities of exact SKUs "
                     "only, use search_items_skus. For historical component "
                     "sales over time, use analyse_items_used. "
                     "The ordered field means: " + ORDERED_AMOUNT_DESCRIPTION
